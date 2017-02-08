@@ -105,15 +105,18 @@ static void on_background_changed(CmkWidget *self_)
 
 void cmk_label_set_text(CmkLabel *self, const gchar *text)
 {
+	g_return_if_fail(CMK_IS_LABEL(self));
 	clutter_text_set_text(PRIVATE(self)->text, text);
 }
 
 const gchar * cmk_label_get_text(CmkLabel *self)
 {
+	g_return_val_if_fail(CMK_IS_LABEL(self), NULL);
 	return clutter_text_get_text(PRIVATE(self)->text);
 }
 
 void cmk_label_set_markup(CmkLabel *self, const gchar *markup)
 {
+	g_return_if_fail(CMK_IS_LABEL(self));
 	clutter_text_set_markup(PRIVATE(self)->text, markup);
 }

@@ -352,6 +352,8 @@ static void graphene_notification_stop_timeout(GrapheneNotification *self)
 static void graphene_notification_set_timeout(GrapheneNotification *self, gint timeout)
 {
 	graphene_notification_stop_timeout(self);
+	if(timeout < 0)
+		timeout = NOTIFICATION_DEFAULT_SHOW_TIME;
 	self->timeout = timeout;
 	if(timeout > 0)
 		self->timeoutSourceId = g_timeout_add(timeout, (GSourceFunc)remove_notification, self);

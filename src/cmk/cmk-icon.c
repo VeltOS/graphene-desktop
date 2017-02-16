@@ -225,6 +225,9 @@ static void update_canvas(ClutterActor *self_)
 	if(private->iconName)
 	{
 		gchar *path = cmk_icon_loader_lookup_full(private->loader, private->iconName, TRUE, private->themeName, TRUE, unscaledSize, scale);
+		if(!path)
+			path = cmk_icon_loader_lookup_full(private->loader, "gtk-missing-image", TRUE, private->themeName, TRUE, unscaledSize, scale);
+			
 		private->iconSurface = cmk_icon_loader_load(private->loader, path, unscaledSize, scale, TRUE);
 	}
 	

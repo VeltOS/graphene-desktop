@@ -307,8 +307,7 @@ void graphene_panel_add_window(GraphenePanel *self, GrapheneWindow *window)
 {
 	if(window->flags & GRAPHENE_WINDOW_FLAG_SKIP_TASKBAR)
 		return;
-	CmkIcon *icon = cmk_icon_new();
-	cmk_icon_set_size(icon, PANEL_HEIGHT * 3 / 4); // Icon is 75% of panel height. 64 -> 48, 32 -> 24, etc.
+	CmkIcon *icon = cmk_icon_new(PANEL_HEIGHT * 3/4); // Icon is 75% of panel height. 64 -> 48, 32 -> 24, etc.
 
 	CmkButton *button = cmk_button_new();
 	g_signal_connect(button, "activate", G_CALLBACK(on_tasklist_button_activate), self);

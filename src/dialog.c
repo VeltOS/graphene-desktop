@@ -483,7 +483,7 @@ void graphene_dialog_set_icon(GrapheneDialog *self, const gchar *iconName)
 
 	if(iconName)
 	{
-		private->icon = CLUTTER_ACTOR(cmk_icon_new_from_name(iconName));
+		private->icon = CLUTTER_ACTOR(cmk_icon_new_from_name(iconName, ICON_SIZE));
 		clutter_actor_add_child(CLUTTER_ACTOR(self), private->icon);
 	}
 }

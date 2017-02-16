@@ -325,7 +325,7 @@ static void graphene_notification_init(GrapheneNotification *self)
 	clutter_text_set_ellipsize(self->text, PANGO_ELLIPSIZE_END);
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->text));
 
-	self->icon = cmk_icon_new();
+	self->icon = cmk_icon_new(48);
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->icon));
 
 	clutter_actor_set_reactive(CLUTTER_ACTOR(self), TRUE);

@@ -280,8 +280,7 @@ static gboolean add_app(GrapheneLauncherPopup *self, GDesktopAppInfo *appInfo)
 		iconName = names[0];
 	}
 
-	CmkIcon *icon = cmk_icon_new_from_name(iconName ? iconName : "open-menu-symbolic");
-	cmk_icon_set_size(icon, 24);
+	CmkIcon *icon = cmk_icon_new_from_name(iconName ? iconName : "open-menu-symbolic", 24);
 	cmk_button_set_content(button, CMK_WIDGET(icon));
 	cmk_button_set_text(button, g_app_info_get_display_name(G_APP_INFO(appInfo)));
 	cmk_widget_set_style_parent(CMK_WIDGET(button), self->window);

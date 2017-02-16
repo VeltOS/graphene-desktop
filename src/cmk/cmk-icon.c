@@ -44,14 +44,17 @@ static void update_canvas(ClutterActor *self_);
 G_DEFINE_TYPE_WITH_PRIVATE(CmkIcon, cmk_icon, CMK_TYPE_WIDGET);
 #define PRIVATE(icon) ((CmkIconPrivate *)cmk_icon_get_instance_private(icon))
 
-CmkIcon * cmk_icon_new(void)
+CmkIcon * cmk_icon_new(gfloat size)
 {
-	return CMK_ICON(g_object_new(CMK_TYPE_ICON, NULL));
+	return CMK_ICON(g_object_new(CMK_TYPE_ICON, "icon-size", size, NULL));
 }
 
-CmkIcon * cmk_icon_new_from_name(const gchar *iconName)
+CmkIcon * cmk_icon_new_from_name(const gchar *iconName, gfloat size)
 {
-	return CMK_ICON(g_object_new(CMK_TYPE_ICON, "icon-name", iconName, NULL));
+	return CMK_ICON(g_object_new(CMK_TYPE_ICON,
+		"icon-name", iconName,
+		"icon-size", size,
+		NULL));
 }
 
 CmkIcon * cmk_icon_new_full(const gchar *iconName, const gchar *themeName, gfloat size, gboolean useForeground)
@@ -158,11 +161,8 @@ static void cmk_icon_get_property(GObject *self_, guint propertyId, GValue *valu
 
 static void on_style_changed(CmkWidget *self_)
 {
-	if(PRIVATE(CMK_ICON(self_))->size > 0)
-	{
-		gfloat size = PRIVATE(CMK_ICON(self_))->size * cmk_widget_style_get_scale_factor(self_);
-		clutter_actor_set_size(CLUTTER_ACTOR(self_), size, size);
-	}
+	gfloat final = PRIVATE(CMK_ICON(self_))->size * cmk_widget_style_get_scale_factor(self_);
+	clutter_actor_set_size(CLUTTER_ACTOR(self_), final, final);
 	CMK_WIDGET_CLASS(cmk_icon_parent_class)->style_changed(self_);
 }
 
@@ -255,7 +255,7 @@ void cmk_icon_set_size(CmkIcon *self, gfloat size)
 			size = 0;
 		PRIVATE(self)->size = size;
 		gfloat scale = cmk_widget_style_get_scale_factor(CMK_WIDGET(self));
-		gfloat final = (size <= 0) ? -1 : scale * size;
+		gfloat final = scale * size;
 		clutter_actor_set_size(CLUTTER_ACTOR(self), final, final);
 	}
 }

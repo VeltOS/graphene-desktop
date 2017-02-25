@@ -116,12 +116,12 @@ static void graphene_notification_box_dispose(GObject *self_)
 	G_OBJECT_CLASS(graphene_notification_box_parent_class)->dispose(self_);
 }
 
-static GrapheneNotification * get_notification_by_id(GrapheneNotificationBox *self, guint id)
+GrapheneNotification * get_notification_by_id(GrapheneNotificationBox *self, guint id)
 {
 	ClutterActor *child = clutter_actor_get_first_child(CLUTTER_ACTOR(self));
 	while(child)
 	{
-		ClutterActor *n_ = clutter_actor_get_first_child(child);
+		ClutterActor *n_ = cmk_shadow_get_first_child(CMK_SHADOW(child));
 		if(GRAPHENE_IS_NOTIFICATION(n_) && GRAPHENE_NOTIFICATION(n_)->id == id)
 			return GRAPHENE_NOTIFICATION(n_);
 		child = clutter_actor_get_next_sibling(child);
@@ -218,6 +218,7 @@ static gboolean on_dbus_call_close_notification(GrapheneNotificationBox *self, G
 {
 	GrapheneNotification *n = get_notification_by_id(self, id);
 	if(n)
+		remove_notification(n);
 
 	dbus_notifications_complete_close_notification(object, invocation);
 	return TRUE;
@@ -324,7 +325,7 @@ static void graphene_notification_init(GrapheneNotification *self)
 	clutter_text_set_ellipsize(self->text, PANGO_ELLIPSIZE_END);
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->text));
 
-	self->icon = cmk_icon_new();
+	self->icon = cmk_icon_new(48);
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->icon));
 
 	clutter_actor_set_reactive(CLUTTER_ACTOR(self), TRUE);
@@ -352,6 +353,8 @@ static void graphene_notification_stop_timeout(GrapheneNotification *self)
 static void graphene_notification_set_timeout(GrapheneNotification *self, gint timeout)
 {
 	graphene_notification_stop_timeout(self);
+	if(timeout < 0)
+		timeout = NOTIFICATION_DEFAULT_SHOW_TIME;
 	self->timeout = timeout;
 	if(timeout > 0)
 		self->timeoutSourceId = g_timeout_add(timeout, (GSourceFunc)remove_notification, self);

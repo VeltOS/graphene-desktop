@@ -254,8 +254,7 @@ static void add_setting_widget(GrapheneSettingsPopup *self, const gchar *title, 
 	clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), separator_new());
 
 	CmkButton *button = cmk_button_new();
-	CmkIcon *icon = cmk_icon_new_from_name(iconName);
-	cmk_icon_set_size(icon, 24);
+	CmkIcon *icon = cmk_icon_new_from_name(iconName, 24);
 	cmk_button_set_content(button, CMK_WIDGET(icon));
 	cmk_button_set_text(button, title);
 	cmk_widget_set_style_parent(CMK_WIDGET(button), CMK_WIDGET(self));

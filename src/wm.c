@@ -98,6 +98,20 @@ const MetaPluginInfo * graphene_wm_plugin_info(MetaPlugin *plugin)
 static gint requestedDPI = 1024 * 96;
 static gfloat requestedDPIScale = 1.0;
 
+//#include <math.h>
+//static gboolean sizewarp()
+//{
+//	static gfloat t = 0;
+//	t += 0.05;
+//	requestedDPIScale = 4 * fabs(sin(t));
+//	
+//	CmkWidget *style = cmk_widget_get_style_default();
+//	cmk_widget_style_set_scale_factor(style, requestedDPIScale);
+//	//g_object_set(clutter_settings_get_default(), "font-dpi", (gint)(requestedDPI * requestedDPIScale), NULL);
+//	
+//	return G_SOURCE_CONTINUE;
+//}
+
 void graphene_wm_start(MetaPlugin *self_)
 {
 	// Some stuff for DPI scaling
@@ -110,7 +124,8 @@ void graphene_wm_start(MetaPlugin *self_)
 	g_signal_connect_after(clutter_get_default_backend(), "resolution-changed", G_CALLBACK(reset_clutter_dpi), NULL);
 	g_signal_connect(iconLoader, "notify::scale", G_CALLBACK(on_global_scale_changed), NULL);
 
-	
+	//g_timeout_add(50, sizewarp, NULL);	
+
 	GrapheneWM *self = GRAPHENE_WM(self_);
 
 	MetaScreen *screen = meta_plugin_get_screen(self_);

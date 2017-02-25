@@ -37,8 +37,9 @@ add_executable(graphene-desktop
 	session-dbus-iface.c
 	session.c
 	client.c
-	# status-notifier-watcher.c
-	# ${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.c
+	status-notifier-watcher.c
+	status-notifier-host.c
+	status-notifier-dbus-ifaces.c
 	util.c
 	wm.c
 	percent-floater.c

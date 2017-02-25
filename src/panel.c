@@ -12,6 +12,7 @@
 #include "settings-battery.h"
 #include "network.h"
 #include "status-icons.h"
+#include "status-notifier-host.h"
 
 #define PANEL_HEIGHT 32 // Pixels; multiplied by the window scale factor
 
@@ -36,6 +37,8 @@ struct _GraphenePanel
 	CmkButton *popupSource; // Either launcher or settingsApplet
 	guint popupEventFilterId;
 	ClutterBoxLayout *settingsAppletLayout;
+
+	GrapheneStatusNotifierHost *snHost;
 
 	CmkWidget *tasklist;
 	GHashTable *windows; // GrapheneWindow * (not owned) to CmkWidget * (not refed)
@@ -100,16 +103,20 @@ static void graphene_panel_init(GraphenePanel *self)
 	clutter_actor_set_x_expand(CLUTTER_ACTOR(self->tasklist), TRUE);
 	clutter_actor_add_child(CLUTTER_ACTOR(self->bar), CLUTTER_ACTOR(self->tasklist));
 
+	// Status Notifier Host (System Tray)
+	self->snHost = graphene_status_notifier_host_new();
+	clutter_actor_add_child(CLUTTER_ACTOR(self->bar), CLUTTER_ACTOR(self->snHost));
+
 	// Settings
 	self->settingsApplet = cmk_button_new();
 	CmkWidget *iconBox = cmk_widget_new();
 	ClutterLayoutManager *layout = clutter_box_layout_new();
 	self->settingsAppletLayout = CLUTTER_BOX_LAYOUT(layout);
 	clutter_actor_set_layout_manager(CLUTTER_ACTOR(iconBox), layout);
-	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(cmk_icon_new_full("system-shutdown-symbolic", NULL, PANEL_HEIGHT * 3/4, TRUE)));
-	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(graphene_volume_icon_new(PANEL_HEIGHT * 3/4))); 
-	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(graphene_network_icon_new(PANEL_HEIGHT * 2/4))); 
-	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(graphene_battery_icon_new(PANEL_HEIGHT * 3/4))); 
+	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(cmk_icon_new_full("system-shutdown-symbolic", NULL, 24, TRUE)));
+	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(graphene_volume_icon_new(24))); 
+	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(graphene_network_icon_new(16))); 
+	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(graphene_battery_icon_new(24))); 
 	cmk_button_set_content(self->settingsApplet, iconBox);
 	g_signal_connect(self->settingsApplet, "activate", G_CALLBACK(on_settings_button_activate), self);
 	clutter_actor_add_child(CLUTTER_ACTOR(self->bar), CLUTTER_ACTOR(self->settingsApplet));
@@ -307,8 +314,7 @@ void graphene_panel_add_window(GraphenePanel *self, GrapheneWindow *window)
 {
 	if(window->flags & GRAPHENE_WINDOW_FLAG_SKIP_TASKBAR)
 		return;
-	CmkIcon *icon = cmk_icon_new();
-	cmk_icon_set_size(icon, PANEL_HEIGHT * 3 / 4); // Icon is 75% of panel height. 64 -> 48, 32 -> 24, etc.
+	CmkIcon *icon = cmk_icon_new(24); // Icon is 75% of panel height. 64 -> 48, 32 -> 24, etc.
 
 	CmkButton *button = cmk_button_new();
 	g_signal_connect(button, "activate", G_CALLBACK(on_tasklist_button_activate), self);

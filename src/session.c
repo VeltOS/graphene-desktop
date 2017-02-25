@@ -86,6 +86,7 @@ typedef struct {
 	DBusSessionManager *dbusSMSkeleton;
 	DBusPolkitAuthAgent *dbusPkAgentSkeleton;
 	gchar *ldSessionObject; // DBus session object path provided by systemd-logind
+	GrapheneStatusNotifierWatcher *statusNotifierWatcher;
 	
 	GList *pkAuthDialogList; // In case multiple requests come in at once, put them in a wait list. The first in the list is always the current one.
 
@@ -166,6 +167,9 @@ static gboolean graphene_session_exit_internal(gboolean failed)
 	// (In a successful logout, there should be no clients left anyway)
 	g_list_free_full(session->clients, g_object_unref);
 	session->clients = NULL;
+
+	// Destroy status notifier watcher
+	g_clear_object(&session->statusNotifierWatcher);
 	
 	// May be blocking according to g_bus_unown_name source code
 	if(session->dbusNameId)
@@ -458,6 +462,8 @@ static gboolean run_phase_idle(SessionPhase phase)
 				session->startupCb(session->cbUserdata);
 			launch_apps();
 		}
+		if(!session->statusNotifierWatcher)
+			session->statusNotifierWatcher = graphene_status_notifier_watcher_new();
 		break;
 	case SESSION_PHASE_LOGOUT:
 		g_message("------------------------");

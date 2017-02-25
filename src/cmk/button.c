@@ -234,7 +234,7 @@ static void cmk_button_allocate(ClutterActor *self_, const ClutterActorBox *box,
 	if(private->content && private->text)
 	{
 		gfloat min, nat;
-		clutter_actor_get_preferred_width(CLUTTER_ACTOR(private->content), -1, &min, &nat);
+		clutter_actor_get_preferred_width(CLUTTER_ACTOR(private->content), maxHeight-hPad*2, &min, &nat);
 		gfloat contentRight = MIN(wPad+nat, maxWidth);
 		ClutterActorBox contentBox = {wPad, hPad, contentRight, maxHeight-hPad};
 		clutter_actor_allocate(CLUTTER_ACTOR(private->content), &contentBox, flags);

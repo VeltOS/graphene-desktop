@@ -15,6 +15,7 @@ struct _CmkIconPrivate
 	gboolean useForegroundColor;
 	CmkIconLoader *loader;
 	cairo_surface_t *iconSurface;
+	gboolean setPixmap;
 
 	// A size "request" for the actor. Can be scaled by the style scale
 	// factor. If this is <=0, the actor's standard allocated size is used.
@@ -209,6 +210,9 @@ static void update_canvas(ClutterActor *self_)
 	ClutterCanvas *canvas = CLUTTER_CANVAS(clutter_actor_get_content(self_));
 
 	CmkIconPrivate *private = PRIVATE(CMK_ICON(self_));
+	if(private->setPixmap)
+		return;
+
 	g_clear_pointer(&private->iconSurface, cairo_surface_destroy);
 
 	guint scale = cmk_icon_loader_get_scale(private->loader);
@@ -240,13 +244,28 @@ void cmk_icon_set_icon(CmkIcon *self, const gchar *iconName)
 	g_return_if_fail(CMK_IS_ICON(self));
 	g_free(PRIVATE(self)->iconName);
 	PRIVATE(self)->iconName = g_strdup(iconName);
+	PRIVATE(self)->setPixmap = FALSE;
 	update_canvas(CLUTTER_ACTOR(self));
 }
 
 const gchar * cmk_icon_get_icon(CmkIcon *self)
 {
 	g_return_val_if_fail(CMK_IS_ICON(self), NULL);
+	if(PRIVATE(self)->setPixmap)
+		return NULL;
 	return PRIVATE(self)->iconName;
+}
+
+void cmk_icon_set_pixmap(CmkIcon *self, guchar *data, cairo_format_t format, guint size, guint frames, guint fps)
+{
+	CmkIconPrivate *private = PRIVATE(self);
+	g_clear_pointer(&private->iconSurface, cairo_surface_destroy);
+	cairo_surface_t *surface = cairo_image_surface_create_for_data(data, format, size, size, cairo_format_stride_for_width(format, size));
+	private->iconSurface = surface;
+
+	ClutterCanvas *canvas = CLUTTER_CANVAS(clutter_actor_get_content(CLUTTER_ACTOR(self)));
+	private->setPixmap = TRUE;
+	clutter_content_invalidate(CLUTTER_CONTENT(canvas));
 }
 
 void cmk_icon_set_size(CmkIcon *self, gfloat size)

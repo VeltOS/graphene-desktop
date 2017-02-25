@@ -8,6 +8,7 @@
 #define __CMK_ICON_H__
 
 #include "cmk-widget.h"
+#include <cairo.h>
 
 G_BEGIN_DECLS
 
@@ -29,6 +30,17 @@ void cmk_icon_set_icon(CmkIcon *icon, const gchar *iconName);
 const gchar * cmk_icon_get_icon(CmkIcon *icon);
 
 /*
+ * Instead of using a named icon, use a pixel buffer (or animation). For a
+ * static image, set frames to 1. Otherwise, buf should contain a sequence
+ * of pixmaps in order and frames should be the number of pixmaps. 
+ * Note that the pixmap must be a square, of width and height 'size'. This
+ * does not need to be the same size as set with cmk_icon_set_size or
+ * the CmkIcon constructors; if it is not, the pixmap will be scaled.
+ * The stride of the data buffer must be appropriate for the given format
+ * and size.
+ */
+void cmk_icon_set_pixmap(CmkIcon *icon, guchar *data, cairo_format_t format, guint size, guint frames, guint fps);
+
 /*
  * Sets the square size of the icon. This automatically takes into
  * account the widget's scale factor and adjusts the size appropriately.

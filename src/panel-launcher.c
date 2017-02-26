@@ -347,7 +347,8 @@ static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenu
 
 static void applist_on_item_clicked(GrapheneLauncherPopup *self, CmkButton *button)
 {
-	clutter_actor_destroy(CLUTTER_ACTOR(self));
+	// Delay so the click animation can be seen
+	clutter_threads_add_timeout(200, (GSourceFunc)clutter_actor_destroy, self);
 
 	GDesktopAppInfo *appInfo = g_object_get_data(G_OBJECT(button), "appinfo");
 	if(appInfo)

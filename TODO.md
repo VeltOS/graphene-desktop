@@ -21,7 +21,7 @@
  - [ ] Screen keyboard support
  
 - Other
- - [ ] Button press animation
+ - [x] Button press animation
  - [ ] Hightlight animation
  - [ ] Notification action buttons
  - [ ] i18n

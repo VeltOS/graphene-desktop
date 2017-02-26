@@ -190,6 +190,7 @@ static gboolean on_scroll(ClutterScrollActor *scroll, ClutterScrollEvent *event,
 
 static void on_logout_button_activate(CmkButton *button, GrapheneSettingsPopup *self)
 {
+	// Don't destroy after delay, it doesn't look very good
 	clutter_actor_destroy(CLUTTER_ACTOR(self));
 	if(self->logoutCb)
 		self->logoutCb(self->cbUserdata);
@@ -240,7 +241,9 @@ static ClutterActor * separator_new()
 static void on_settings_widget_clicked(GrapheneSettingsPopup *self, CmkButton *button)
 {
 	const gchar *args = clutter_actor_get_name(CLUTTER_ACTOR(button));
-	clutter_actor_destroy(CLUTTER_ACTOR(self));
+	
+	// Delay so the click animation can be seen
+	clutter_threads_add_timeout(200, (GSourceFunc)clutter_actor_destroy, self);
 
 	gchar **argsSplit = g_new0(gchar *, 3);
 	argsSplit[0] = g_strdup("gnome-control-center");

@@ -15,6 +15,7 @@ struct _CmkButtonPrivate
 	gboolean hover;
 	gboolean selected;
 	CmkButtonType type;
+	ClutterTimeline *clickAnim;
 };
 
 enum
@@ -33,12 +34,14 @@ enum
 static GParamSpec *properties[PROP_LAST];
 static guint signals[SIGNAL_LAST];
 
+static void cmk_button_dispose(GObject *self_);
 static void cmk_button_set_property(GObject *self_, guint propertyId, const GValue *value, GParamSpec *pspec);
 static void cmk_button_get_property(GObject *self_, guint propertyId, GValue *value, GParamSpec *pspec);
 static void cmk_button_get_preferred_width(ClutterActor *self_, gfloat forHeight, gfloat *minWidth, gfloat *natWidth);
 static void cmk_button_get_preferred_height(ClutterActor *self_, gfloat forWidth, gfloat *minHeight, gfloat *natHeight);
 static void cmk_button_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags);
 static void on_clicked(ClutterClickAction *action, CmkButton *self);
+static gboolean on_button_press(ClutterActor *self_, ClutterButtonEvent *event);
 static gboolean on_crossing(ClutterActor *self_, ClutterCrossingEvent *event);
 static void on_style_changed(CmkWidget *self_);
 static void on_background_changed(CmkWidget *self_);
@@ -68,12 +71,14 @@ CmkButton * cmk_button_new_full(const gchar *text, CmkButtonType type)
 static void cmk_button_class_init(CmkButtonClass *class)
 {
 	GObjectClass *base = G_OBJECT_CLASS(class);
+	base->dispose = cmk_button_dispose;
 	base->set_property = cmk_button_set_property;
 	base->get_property = cmk_button_get_property;
 
 	ClutterActorClass *actorClass = CLUTTER_ACTOR_CLASS(class);
 	actorClass->enter_event = on_crossing;
 	actorClass->leave_event = on_crossing;
+	actorClass->button_press_event = on_button_press;
 	actorClass->get_preferred_width = cmk_button_get_preferred_width;
 	actorClass->get_preferred_height = cmk_button_get_preferred_height;
 	actorClass->allocate = cmk_button_allocate;
@@ -89,9 +94,21 @@ static void cmk_button_class_init(CmkButtonClass *class)
 	signals[SIGNAL_ACTIVATE] = g_signal_new("activate", G_TYPE_FROM_CLASS(class), G_SIGNAL_RUN_FIRST, G_STRUCT_OFFSET(CmkButtonClass, activate), NULL, NULL, NULL, G_TYPE_NONE, 0);
 }
 
+static void on_anim_canvas(CmkButton *self)
+{
+	CmkButtonPrivate *private = PRIVATE(self);
+	if(private->clickAnim)
+		clutter_content_invalidate(clutter_actor_get_content(CLUTTER_ACTOR(self)));
+}
+
 static void cmk_button_init(CmkButton *self)
 {
 	ClutterContent *canvas = clutter_canvas_new();
+
+	CmkButtonPrivate *private = PRIVATE(self);
+	private->clickAnim = clutter_timeline_new(400);
+	g_signal_connect_swapped(private->clickAnim, "new-frame", G_CALLBACK(on_anim_canvas), self);
+
 	g_signal_connect(canvas, "draw", G_CALLBACK(on_draw_canvas), self);
 
 	ClutterActor *actor = CLUTTER_ACTOR(self);
@@ -106,6 +123,13 @@ static void cmk_button_init(CmkButton *self)
 	ClutterAction *action = clutter_click_action_new();
 	g_signal_connect(action, "clicked", G_CALLBACK(on_clicked), NULL);
 	clutter_actor_add_action(actor, action);
+}
+
+static void cmk_button_dispose(GObject *self_)
+{
+	clutter_actor_set_content(CLUTTER_ACTOR(self_), NULL);
+	g_clear_object(&(PRIVATE(CMK_BUTTON(self_))->clickAnim));
+	G_OBJECT_CLASS(cmk_button_parent_class)->dispose(self_);
 }
 
 static void cmk_button_set_property(GObject *self_, guint propertyId, const GValue *value, GParamSpec *pspec)
@@ -259,6 +283,13 @@ static void on_clicked(ClutterClickAction *action, CmkButton *self)
 	g_signal_emit(self, signals[SIGNAL_ACTIVATE], 0);
 }
 
+static gboolean on_button_press(ClutterActor *self_, ClutterButtonEvent *event)
+{
+	clutter_timeline_stop(PRIVATE(CMK_BUTTON(self_))->clickAnim);
+	clutter_timeline_start(PRIVATE(CMK_BUTTON(self_))->clickAnim);
+	return FALSE;
+}
+
 static gboolean on_crossing(ClutterActor *self_, ClutterCrossingEvent *event)
 {
 	if(event->type == CLUTTER_ENTER)
@@ -272,7 +303,9 @@ static gboolean on_crossing(ClutterActor *self_, ClutterCrossingEvent *event)
 
 static void on_style_changed(CmkWidget *self_)
 {
-	clutter_content_invalidate(clutter_actor_get_content(CLUTTER_ACTOR(self_)));
+	ClutterContent *content = clutter_actor_get_content(CLUTTER_ACTOR(self_));
+	if(content)
+		clutter_content_invalidate(content);
 	//float padding = cmk_style_get_padding(style);
 	//ClutterMargin margin = {padding, padding, padding, padding};
 	//clutter_actor_set_margin(CLUTTER_ACTOR(PRIVATE(CMK_BUTTON(self_))->text), &margin);
@@ -305,10 +338,10 @@ static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, in
 	cairo_paint(cr);
 	cairo_restore(cr);
 
-	if(PRIVATE(self)->hover || PRIVATE(self)->selected)
+	gdouble clickAnimProgress = clutter_timeline_get_progress(PRIVATE(self)->clickAnim);
+
+	if(PRIVATE(self)->hover || PRIVATE(self)->selected || (clickAnimProgress > 0 && clickAnimProgress < 1))
 	{
-		const gchar *color = PRIVATE(self)->hover ? "hover" : "selected";
-		cairo_set_source_clutter_color(cr, cmk_widget_style_get_color(CMK_WIDGET(self), color));
 		if(PRIVATE(self)->type == CMK_BUTTON_TYPE_BEVELED || PRIVATE(self)->type == CMK_BUTTON_TYPE_CIRCLE)
 		{
 			double radius;
@@ -327,11 +360,21 @@ static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, in
 			cairo_arc(cr, radius, height - radius, radius, 90 * degrees, 180 * degrees);
 			cairo_arc(cr, radius, radius, radius, 180 * degrees, 270 * degrees);
 			cairo_close_path(cr);
-			cairo_fill(cr);
+			cairo_clip(cr);
 		}
-		else
+
+		const gchar *color = PRIVATE(self)->hover ? "hover" : "selected";
+		cairo_set_source_clutter_color(cr, cmk_widget_style_get_color(CMK_WIDGET(self), color));
+
+		cairo_paint(cr);
+
+		if(clickAnimProgress > 0)
 		{
-			cairo_paint(cr);
+			cairo_new_sub_path(cr);
+			cairo_arc(cr, width/2, height/2, MAX(width, height)*clickAnimProgress, 0, 2*M_PI);
+			cairo_close_path(cr);
+			cairo_set_source_rgba(cr, 0.9, 0.9, 0.9, (1-clickAnimProgress)*0.3);
+			cairo_fill(cr);
 		}
 	}
 	return TRUE;

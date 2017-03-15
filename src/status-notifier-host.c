@@ -362,6 +362,8 @@ static void item_update_icon_try_pixmap(GDBusConnection *connection, GAsyncResul
 			if(anim)
 			{
 				cmk_icon_set_pixmap(item->icon, anim, CAIRO_FORMAT_ARGB32, size, frames, 12);
+				cmk_icon_set_size(item->icon, MIN(size, 20));
+
 				clutter_actor_show(CLUTTER_ACTOR(item->button));
 				g_free(anim);
 				g_variant_unref(iconPixmapVariant);

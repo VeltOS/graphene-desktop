@@ -20,26 +20,7 @@
  *
  * CSM = Graphene Session Manager (Because GSM = GNOME SM)
  * C is for Carbon because graphene is made of carbon. Get it? Yay.
- *
- * Session Manager Phases:
- * 0. Init
- *    Get a DBus connection and obtain a well-known name for the SM. Export
- *    SM interface. On success, move to Startup. If the connection is ever
- *    lost (in any phase), this is a fatal error, and quit.
- * 1. Startup
- *    Spawn base processes listed in .desktop files. This includes the Panel,
- *    File Manager, etc. Wait for all of these to register or complete before
- *    moving to phase two.
- * 2. Running
- *    Spawn any remaining .desktop files (mostly user-specified startup apps)
- *    and idle. Listen for clients to register/unregister or to set inhibits
- *    on the session.
- * 3. Logout
- *    Triggered by a DBus signal. Send end-session requests to all registered
- *    clients, and wait for them to reject end-session or close. If any clients
- *    reject, return to Running phase and inform user about the client(s).
  */
-
 
 #include "session.h"
 #include <gio/gio.h>
@@ -65,12 +46,33 @@
 // Generated name is a bit too long...
 typedef DBusOrgFreedesktopPolicyKit1AuthenticationAgent DBusPolkitAuthAgent; 
 
+// Session phases happen in linear order and only happen at most once each.
 typedef enum {
+	// Connection to system and session dbus, aborts session on fail or
+	// continues to STARTUP on completion of both connections.
 	SESSION_PHASE_INIT = 0,
+
+	// Launches required daemons and programs, waits for them to complete
+	// or register before continuing to IDLE.
 	SESSION_PHASE_STARTUP,
-	SESSION_PHASE_RUNNING,
-	SESSION_PHASE_LOGOUT,
+
+	// Launches user applications at the beginning, but does not watch
+	// for their success. After that, it's idle waiting for clients to
+	// send dbus commands.
+	SESSION_PHASE_IDLE,
+
+	// This phase cannot be aborted; any inhibiting clients should
+	// have been resolved before this phase begins. If any clients
+	// resist logout for too long, the session will self-destruct
+	// (and depending on exitType, logout, reboot, or shutdown).
+	SESSION_PHASE_EXIT,
 } SessionPhase;
+
+typedef enum {
+	EXIT_LOGOUT,
+	EXIT_REBOOT,
+	EXIT_SHUTDOWN,
+} ExitType;
 
 typedef struct {
 	CSMStartupCompleteCallback startupCb;
@@ -78,11 +80,13 @@ typedef struct {
 	CSMQuitCallback quitCb;
 	gpointer cbUserdata;
 
+	// DBus
 	GCancellable *cancel;
 	GDBusConnection *eBus; // sEssion DBus Connection
 	GDBusConnection *yBus; // sYstem DBus Connection
 	guint dbusNameId;
 	gboolean hasName;
+	gboolean polkitIsRegistered;
 	DBusSessionManager *dbusSMSkeleton;
 	DBusPolkitAuthAgent *dbusPkAgentSkeleton;
 	gchar *ldSessionObject; // DBus session object path provided by systemd-logind
@@ -91,11 +95,11 @@ typedef struct {
 	GList *pkAuthDialogList; // In case multiple requests come in at once, put them in a wait list. The first in the list is always the current one.
 
 	SessionPhase phase;
+	ExitType exitType;
+	
 	GList *clients;
 } GrapheneSession;
 
-
-static gboolean graphene_session_exit_internal(gboolean failed);
 
 static void on_ybus_connection_acquired(GObject *source, GAsyncResult *res, gpointer userdata);
 static void on_logind_session_acquired(GDBusConnection *yBus, GAsyncResult *res, gpointer userdata);
@@ -105,14 +109,17 @@ static void on_eybus_connection_lost(GDBusConnection *eyBus, gboolean remotePeer
 static void on_dbus_name_acquired(GDBusConnection *connection, const gchar *name, void *userdata);
 static void on_dbus_name_lost(GDBusConnection *connection, const gchar *name, void *userdata);
 
-static void run_phase(SessionPhase phase);
+static void do_startup();
 static gboolean check_startup_complete();
+static void do_idle_phase();
+
+static void stop_self_destruct();
+static void self_destruct_countdown();
 
 static void on_client_notify_ready(GrapheneSessionClient *client);
 static void on_client_notify_complete(GrapheneSessionClient *client);
 
-static void launch_desktop();
-static void launch_apps();
+static GHashTable * list_autostarts();
 static void launch_autostart(GDesktopAppInfo *desktopInfo);
 
 static void connect_dbus_methods();
@@ -124,7 +131,7 @@ static gboolean on_pk_agent_cancel_authentication(DBusPolkitAuthAgent *object, G
 static GrapheneSession *session = NULL;
 
 /*
- * GrapheneSession
+ * Init
  */
 
 void graphene_session_init(CSMStartupCompleteCallback startupCb, CSMDialogCallback dialogCb, CSMQuitCallback quitCb, gpointer cbUserdata)
@@ -133,12 +140,14 @@ void graphene_session_init(CSMStartupCompleteCallback startupCb, CSMDialogCallba
 		return;
 	
 	session = g_new0(GrapheneSession, 1);
+	session->phase = SESSION_PHASE_INIT;
+	session->exitType = EXIT_LOGOUT;
 	
 	session->startupCb = startupCb;
 	session->dialogCb = dialogCb;
 	session->quitCb = quitCb;
 	session->cbUserdata = cbUserdata;
-
+	
 	// Setup session bus things (export SM interface, etc) and system bus
 	// things (systemd-logind interaction, etc) at the same time. If either one
 	// fails, abort the session. Whichever one finishes last will run the
@@ -150,7 +159,397 @@ void graphene_session_init(CSMStartupCompleteCallback startupCb, CSMDialogCallba
 	g_bus_get(G_BUS_TYPE_SESSION, session->cancel, on_ebus_connection_acquired, NULL);
 }
 
-static gboolean graphene_session_exit_internal(gboolean failed)
+static void on_ybus_connection_acquired(GObject *source, GAsyncResult *res, gpointer userdata)
+{
+	GError *error = NULL;
+	GDBusConnection *yBus = g_bus_get_finish(res, &error);
+	if(!yBus || error)
+	{
+		g_critical("Failed to acquire System DBus connection.");
+		g_clear_object(&yBus);
+		g_clear_error(&error);
+		graphene_session_exit(TRUE);
+		return;	
+	}
+	
+	g_message("Acquired System DBus connection.");
+	g_signal_connect(yBus, "closed", G_CALLBACK(on_eybus_connection_lost), NULL);
+	g_dbus_connection_set_exit_on_close(yBus, FALSE);
+	session->yBus = yBus;
+	
+	g_dbus_connection_call(yBus,
+		"org.freedesktop.login1",
+		"/org/freedesktop/login1",
+		"org.freedesktop.login1.Manager",
+		"GetSessionByPID",
+		g_variant_new("(u)", getpid()),
+		G_VARIANT_TYPE("(o)"),
+		G_DBUS_CALL_FLAGS_NONE,
+		-1,
+		session->cancel,
+		(GAsyncReadyCallback)on_logind_session_acquired,
+		NULL);
+}
+
+static void on_logind_session_acquired(GDBusConnection *yBus, GAsyncResult *res, gpointer userdata)
+{
+	GError *error = NULL;
+	GVariant *ret = g_dbus_connection_call_finish(yBus, res, &error);
+	if(!ret || error)
+	{
+		g_critical("Failed to find logind session");
+		if(error)
+			g_critical("%s", error->message);
+		g_clear_error(&error);
+		g_clear_object(&ret);
+		graphene_session_exit(TRUE);
+		return;
+	}
+	
+	g_variant_get(ret, "(o)", &session->ldSessionObject);
+	g_message("Got session ID: %s", session->ldSessionObject);
+	g_variant_unref(ret);
+	
+	session->dbusPkAgentSkeleton = dbus_org_freedesktop_policy_kit1_authentication_agent_skeleton_new();
+	g_signal_connect(session->dbusPkAgentSkeleton, "handle-begin-authentication", G_CALLBACK(on_pk_agent_begin_authentication), NULL);
+	g_signal_connect(session->dbusPkAgentSkeleton, "handle-cancel-authentication", G_CALLBACK(on_pk_agent_cancel_authentication), NULL);
+	
+	// TODO: Failing to register as an authentication agent probably shouldn't
+	// be fatal. The session could still run without it (although various
+	// things may not work).
+	if(!g_dbus_interface_skeleton_export(G_DBUS_INTERFACE_SKELETON(session->dbusPkAgentSkeleton), yBus, POLKIT_AUTH_AGENT_DBUS_PATH, NULL))
+	{
+		g_critical("Failed to export PolKit authentication agent dbus object.");
+		graphene_session_exit(TRUE);
+		return;
+	}
+	
+	// PolKit just wants the session id, not the full object path
+	// The object path is in the form /org/freedesktop/login1/session/<session id>
+	gchar **tokens = g_strsplit(session->ldSessionObject, "/", -1);
+	guint numTokens = g_strv_length(tokens);
+	GVariant *sessionIdV = g_variant_new_string(tokens[numTokens-1]);
+	g_strfreev(tokens);
+	
+	GVariantBuilder builder;
+	g_variant_builder_init(&builder, G_VARIANT_TYPE("a{sv}"));
+	g_variant_builder_add(&builder, "{sv}", "session-id", sessionIdV);
+	GVariant *dict = g_variant_builder_end(&builder);
+	
+	g_dbus_connection_call(yBus,
+		"org.freedesktop.PolicyKit1",
+		"/org/freedesktop/PolicyKit1/Authority",
+		"org.freedesktop.PolicyKit1.Authority",
+		"RegisterAuthenticationAgent",
+		g_variant_new("((s@a{sv})ss)",
+			"unix-session",
+			dict,
+			g_getenv("LANG"),
+			POLKIT_AUTH_AGENT_DBUS_PATH),
+		NULL,
+		G_DBUS_CALL_FLAGS_NONE,
+		-1,
+		session->cancel,
+		(GAsyncReadyCallback)on_polkit_auth_agent_registered,
+		NULL);
+}
+
+static void on_polkit_auth_agent_registered(GDBusConnection *yBus, GAsyncResult *res, gpointer userdata)
+{
+	GError *error = NULL;
+	GVariant *ret = g_dbus_connection_call_finish(yBus, res, &error);
+	if(error)
+	{
+		g_critical("Failed to register as PolKit Authentication Agent: %s", error->message);
+		g_clear_error(&error);
+		graphene_session_exit(TRUE);
+		return;
+	}
+	
+	g_variant_unref(ret);
+ 
+	g_message("Registered as authentication agent!");
+	if(session->hasName)
+	{
+		g_message("Running session from auth registered");
+		do_startup();
+	}
+}
+
+static void on_ebus_connection_acquired(GObject *source, GAsyncResult *res, gpointer userdata)
+{
+	GError *error = NULL;
+	GDBusConnection *eBus = g_bus_get_finish(res, &error);
+	if(!eBus || error)
+	{
+		g_critical("Failed to acquire Session DBus connection.");
+		g_clear_object(&eBus);
+		g_clear_error(&error);
+		graphene_session_exit(TRUE);
+		return;	
+	}
+	
+	g_message("Acquired Session DBus connection.");
+	
+	g_signal_connect(eBus, "closed", G_CALLBACK(on_eybus_connection_lost), NULL);
+	g_dbus_connection_set_exit_on_close(eBus, FALSE);
+	session->eBus = eBus;
+	
+	session->dbusSMSkeleton = dbus_session_manager_skeleton_new();
+	connect_dbus_methods();
+	dbus_session_manager_set_session_name(session->dbusSMSkeleton, GRAPHENE_SESSION_NAME);
+	dbus_session_manager_set_session_is_active(session->dbusSMSkeleton, FALSE);
+	// TODO: How does inhibited_actions work
+	//dbus_session_manager_set_inhibited_actions(session->dbusSMSkeleton, ...);
+	
+	if(!g_dbus_interface_skeleton_export(G_DBUS_INTERFACE_SKELETON(session->dbusSMSkeleton), eBus, SESSION_DBUS_PATH, NULL))
+	{
+		g_critical("Failed to export SM dbus object.");
+		graphene_session_exit(TRUE);
+		return;
+	}
+	
+	session->dbusNameId = g_bus_own_name_on_connection(eBus, 
+		SESSION_DBUS_NAME,
+		G_BUS_NAME_OWNER_FLAGS_REPLACE,
+		on_dbus_name_acquired,
+		on_dbus_name_lost,
+		NULL,
+		NULL);
+}
+
+static void on_eybus_connection_lost(GDBusConnection *eyBus, gboolean remotePeerVanished, GError *error, gpointer userdata)
+{
+	g_critical("Lost connecion to the Session or System DBus.");
+	g_clear_object(&session->yBus);
+	g_clear_object(&session->eBus);
+	graphene_session_exit(TRUE);
+}
+
+static void on_dbus_name_acquired(GDBusConnection *eBus, const gchar *name, void *userdata)
+{
+	session->hasName = TRUE;
+	g_message("Acquired name '%s' on the Session DBus", SESSION_DBUS_NAME);
+	
+	if(session->polkitIsRegistered)
+	{
+		g_message("Running session from dbus name acquired");
+		do_startup();
+	}
+}
+
+static void on_dbus_name_lost(GDBusConnection *eBus, const gchar *name, void *userdata)
+{
+	// Not necessarily fatal if the name is lost but connection isn't, so
+	// keep the session alive. No new clients will be able to register, but
+	// existing clients should be fine, and logout should work.
+	session->hasName = FALSE;
+	g_warning("Lost name on the Session DBus");
+}
+
+
+
+/*
+ * Startup
+ */
+
+static void launch_desktop();
+
+static void do_startup()
+{
+	g_return_if_fail(session->phase == SESSION_PHASE_INIT);
+	g_message("==== STARTUP ====");
+	
+	session->phase = SESSION_PHASE_STARTUP;
+	session->statusNotifierWatcher = graphene_status_notifier_watcher_new();
+	launch_desktop();
+	check_startup_complete();
+	
+	self_destruct_countdown();
+}
+
+static gboolean check_startup_complete()
+{
+	if(session->phase != SESSION_PHASE_STARTUP)
+		return FALSE;
+	for(GList *it = session->clients; it != NULL; it = it->next)
+	{
+		if(!graphene_session_client_get_is_ready(it->data))
+		{
+			g_message("... Client '%s' is not ready\n", graphene_session_client_get_best_name(it->data));
+			return FALSE;
+		}
+	}
+	
+	do_idle_phase();
+	return TRUE;
+}
+
+static void launch_desktop()
+{
+	GHashTable *autostarts = list_autostarts();
+	GHashTableIter iter;
+	gpointer key, value;
+	g_hash_table_iter_init(&iter, autostarts);
+	while(g_hash_table_iter_next(&iter, &key, &value))
+	{    
+		GDesktopAppInfo *desktopInfo = G_DESKTOP_APP_INFO(value);
+    	gchar *phase = g_desktop_app_info_get_string(desktopInfo, "X-GNOME-Autostart-Phase");
+	
+		// Just launch all of the startup phases at once. Maybe give it order later,
+		// but it doesn't make much difference.
+		if(g_strcmp0(phase, "Initialization") == 0
+		|| g_strcmp0(phase, "Panel") == 0
+		|| g_strcmp0(phase, "Desktop") == 0)
+		{
+			launch_autostart(desktopInfo);
+		}
+	}
+}
+
+
+
+/*
+ * Idle
+ */
+
+static void launch_apps();
+
+static void do_idle_phase()
+{
+	g_return_if_fail(session->phase == SESSION_PHASE_STARTUP);
+	g_message("===== IDLE =====");
+
+	session->phase = SESSION_PHASE_IDLE;
+	stop_self_destruct();
+	dbus_session_manager_set_session_is_active(session->dbusSMSkeleton, TRUE);
+	dbus_session_manager_emit_session_running(session->dbusSMSkeleton);
+	if(session->startupCb)
+		session->startupCb(session->cbUserdata);
+	launch_apps();
+}
+
+static void launch_apps()
+{
+	GHashTable *autostarts = list_autostarts();
+	GHashTableIter iter;
+	gpointer key, value;
+	g_hash_table_iter_init(&iter, autostarts);
+	while(g_hash_table_iter_next(&iter, &key, &value))
+	{    
+		GDesktopAppInfo *desktopInfo = G_DESKTOP_APP_INFO(value);
+    	gchar *phase = g_desktop_app_info_get_string(desktopInfo, "X-GNOME-Autostart-Phase");
+
+		// Only launch applications not launched in launch_desktop
+		if(g_strcmp0(phase, "Initialization") != 0
+		&& g_strcmp0(phase, "WindowManager") != 0
+		&& g_strcmp0(phase, "Panel") != 0
+		&& g_strcmp0(phase, "Desktop") != 0)
+		{
+			launch_autostart(desktopInfo);
+		}
+	}
+}
+
+
+
+/*
+ * Exit
+ */
+
+static void on_logout_dialog_close(GrapheneDialog *dialog, const gchar *button);
+static void on_inhibitors_dialog_close(GrapheneDialog *dialog, const gchar *button);
+static void do_exit(ExitType exitType, gboolean force);
+
+void graphene_session_request_logout()
+{	
+	GrapheneDialog *dialog = graphene_dialog_new_simple("How would you like to exit?\n(Restart and Shutdown not yet implemented)", NULL, "Cancel", "Logout", "Restart", "Shutdown", NULL);
+	g_signal_connect(dialog, "select", G_CALLBACK(on_logout_dialog_close), NULL);
+	session->dialogCb(CLUTTER_ACTOR(dialog), session->cbUserdata);
+}
+
+static void on_logout_dialog_close(GrapheneDialog *dialog, const gchar *button)
+{
+	session->dialogCb(NULL, session->cbUserdata);
+	if(g_strcmp0(button, "Shutdown") == 0)
+		do_exit(EXIT_SHUTDOWN, FALSE);
+	else if(g_strcmp0(button, "Restart") == 0)
+		do_exit(EXIT_REBOOT, FALSE);
+	else if(g_strcmp0(button, "Logout") == 0)
+		do_exit(EXIT_LOGOUT, FALSE); 
+}
+
+void notify_inhibitors()
+{	
+	const gchar *type = "logout";
+	if(session->exitType == EXIT_SHUTDOWN)
+		type = "shutdown";
+	else if(session->exitType == EXIT_REBOOT)
+		type = "restart";
+	gchar *msg = g_strdup_printf("An application is blocking %s. Force %s?", type, type);
+	GrapheneDialog *dialog = graphene_dialog_new_simple(type, NULL, "Cancel", "Force", NULL);
+	g_signal_connect(dialog, "select", G_CALLBACK(on_inhibitors_dialog_close), NULL);
+	session->dialogCb(CLUTTER_ACTOR(dialog), session->cbUserdata);
+}
+
+static void on_inhibitors_dialog_close(GrapheneDialog *dialog, const gchar *button)
+{
+	session->dialogCb(NULL, session->cbUserdata);
+	if(g_strcmp0(button, "Force") == 0)
+		do_exit(session->exitType, TRUE);
+	else
+		session->exitType = EXIT_LOGOUT; // Reset it, just in case
+}
+
+static void do_exit(ExitType exitType, gboolean force)
+{
+	g_return_if_fail(session->phase < SESSION_PHASE_EXIT);
+	g_message("==== EXIT (%i) ====", exitType);
+	session->exitType = exitType;
+	
+	if(!force)
+	{
+		// TODO: Check for systemd shutdown/restart inhibitors
+		gboolean inhibited = FALSE;
+		for(GList *it = session->clients; it != NULL; it=it->next)
+		{
+			GrapheneSessionClient *client = it->data;
+			if(graphene_session_client_is_inhibited(client))
+			{
+				inhibited = TRUE;
+				g_message("Client '%s' is blocking exit", graphene_session_client_get_best_name(client));
+			}
+		}
+		
+		if(inhibited)
+		{
+			notify_inhibitors();
+			return;
+		}
+	}
+	
+	session->dialogCb(clutter_actor_new(), session->cbUserdata);
+	
+	session->phase = SESSION_PHASE_EXIT;
+	//dbus_session_manager_set_session_is_active(session->dbusSMSkeleton, FALSE);
+	//dbus_session_manager_emit_session_over(session->dbusSMSkeleton);
+	
+	// Inform all clients of the endsession
+	// Once all clients close, the session will end automatically
+	g_message("Num clients: %i", g_list_length(session->clients));
+	for(GList *it = session->clients; it != NULL;)
+	{
+		GrapheneSessionClient *client = it->data;
+		it=it->next;
+		graphene_session_client_end_session(client);
+	}
+
+	// Start a countdown. If all the clients don't close before
+	// it completes, the session will end anyway.
+	self_destruct_countdown();
+}
+
+gboolean graphene_session_exit(gboolean failed)
 {
 	if(!session)
 		return G_SOURCE_REMOVE;
@@ -190,6 +589,11 @@ static gboolean graphene_session_exit_internal(gboolean failed)
 	g_clear_object(&session->yBus);
 	g_clear_object(&session->eBus);
 
+	if(session->exitType == EXIT_REBOOT)
+		system("reboot");
+	else if(session->exitType == EXIT_SHUTDOWN)
+		system("poweroff");
+
 	CSMQuitCallback quitCb = session->quitCb;
 	gpointer cbUserdata = session->cbUserdata;
 	g_clear_pointer(&session, g_free);
@@ -199,308 +603,53 @@ static gboolean graphene_session_exit_internal(gboolean failed)
 	return G_SOURCE_REMOVE;
 }
 
-static void graphene_session_exit_internal_on_idle(gboolean failed)
+static void graphene_session_exit_on_idle(gboolean failed)
 {
 	// G_PRIORITY_HIGH-10 is higher than G_PRIORITY_HIGH
 	// This "on idle" exit is so that the session can be exited from
 	// callbacks, such as DBus method handlers, without breaking things.
-	g_idle_add_full(G_PRIORITY_HIGH - 10, (GSourceFunc)graphene_session_exit_internal, GINT_TO_POINTER(failed), NULL);
+	g_idle_add_full(G_PRIORITY_HIGH - 10, (GSourceFunc)graphene_session_exit, GINT_TO_POINTER(failed), NULL);
 }
 
-void graphene_session_exit()
+
+//static gboolean do_action_source_remove(void (*func)())
+//{
+//	g_return_val_if_fail(func, G_SOURCE_REMOVE);
+//	func();
+//	return G_SOURCE_REMOVE;
+//}
+//
+//static void wait_idle(void (*func)())
+//{
+//	g_idle_add((GSourceFunc)do_action_source_remove, func);
+//}
+//
+//static int wait_seconds(int seconds, void (*func)())
+//{
+//	return g_timeout_add_seconds(seconds, (GSourceFunc)do_action_source_remove, func);
+//}
+
+static int SelfDestructTimeoutId = 0;
+
+static void stop_self_destruct()
 {
-	if(!session)
-		return;
-
-	graphene_session_exit_internal(TRUE);
+	if(SelfDestructTimeoutId)
+		g_source_remove(SelfDestructTimeoutId);
+	SelfDestructTimeoutId = 0;
 }
 
-void graphene_session_logout()
+static gboolean on_self_destruct()
 {
-	if(!session)
-		return;
-
-	run_phase(SESSION_PHASE_LOGOUT);
-}
-
-static void close_dialog(GrapheneDialog *dialog, const gchar *button)
-{
-	if(g_strcmp0(button, "Cancel") == 0 || g_strcmp0(button, "esc") == 0)
-	{
-		session->dialogCb(NULL, session->cbUserdata);
-	}
-	else
-	{
-		session->dialogCb(clutter_actor_new(), session->cbUserdata);
-		graphene_session_logout();
-	}
-}
-
-void graphene_session_request_logout()
-{	
-	GrapheneDialog *dialog = graphene_dialog_new_simple("How would you like to exit?\n(Restart and Shutdown not yet implemented)", NULL, "Cancel", "Logout", "Restart", "Shutdown", NULL);
-
-	g_signal_connect(dialog, "select", G_CALLBACK(close_dialog), NULL);
-	session->dialogCb(CLUTTER_ACTOR(dialog), session->cbUserdata);
-}
-
-static void on_ybus_connection_acquired(GObject *source, GAsyncResult *res, gpointer userdata)
-{
-	GError *error = NULL;
-	GDBusConnection *yBus = g_bus_get_finish(res, &error);
-	if(!yBus || error)
-	{
-		g_critical("Failed to acquire System DBus connection.");
-		g_clear_object(&yBus);
-		g_clear_error(&error);
-		graphene_session_exit_internal(TRUE);
-		return;	
-	}
-
-	g_message("Acquired System DBus connection.");
-	g_signal_connect(yBus, "closed", G_CALLBACK(on_eybus_connection_lost), NULL);
-	g_dbus_connection_set_exit_on_close(yBus, FALSE);
-	session->yBus = yBus;
-	
-	g_dbus_connection_call(yBus,
-		"org.freedesktop.login1",
-		"/org/freedesktop/login1",
-		"org.freedesktop.login1.Manager",
-		"GetSessionByPID",
-		g_variant_new("(u)", getpid()),
-		G_VARIANT_TYPE("(o)"),
-		G_DBUS_CALL_FLAGS_NONE,
-		-1,
-		session->cancel,
-		(GAsyncReadyCallback)on_logind_session_acquired,
-		NULL);
-}
-
-static void on_logind_session_acquired(GDBusConnection *yBus, GAsyncResult *res, gpointer userdata)
-{
-	GError *error = NULL;
-	GVariant *ret = g_dbus_connection_call_finish(yBus, res, &error);
-	if(!ret || error)
-	{
-		g_critical("Failed to find logind session");
-		if(error)
-			g_critical("%s", error->message);
-		g_clear_error(&error);
-		g_clear_object(&ret);
-		graphene_session_exit_internal(TRUE);
-		return;
-	}
-	
-	g_variant_get(ret, "(o)", &session->ldSessionObject);
-	g_message("Got session ID: %s", session->ldSessionObject);
-	g_variant_unref(ret);
-
-	session->dbusPkAgentSkeleton = dbus_org_freedesktop_policy_kit1_authentication_agent_skeleton_new();
-	g_signal_connect(session->dbusPkAgentSkeleton, "handle-begin-authentication", G_CALLBACK(on_pk_agent_begin_authentication), NULL);
-	g_signal_connect(session->dbusPkAgentSkeleton, "handle-cancel-authentication", G_CALLBACK(on_pk_agent_cancel_authentication), NULL);
-
-	// TODO: Failing to register as an authentication agent probably shouldn't
-	// be fatal. The session could still run without it (although various
-	// things may not work).
-	if(!g_dbus_interface_skeleton_export(G_DBUS_INTERFACE_SKELETON(session->dbusPkAgentSkeleton), yBus, POLKIT_AUTH_AGENT_DBUS_PATH, NULL))
-	{
-		g_critical("Failed to export PolKit authentication agent dbus object.");
-		graphene_session_exit_internal(TRUE);
-		return;
-	}
-
-	// PolKit just wants the session id, not the full object path
-	// The object path is in the form /org/freedesktop/login1/session/<session id>
-	gchar **tokens = g_strsplit(session->ldSessionObject, "/", -1);
-	guint numTokens = g_strv_length(tokens);
-	GVariant *sessionIdV = g_variant_new_string(tokens[numTokens-1]);
-	g_strfreev(tokens);
-
-	GVariantBuilder builder;
-	g_variant_builder_init(&builder, G_VARIANT_TYPE("a{sv}"));
-	g_variant_builder_add(&builder, "{sv}", "session-id", sessionIdV);
-	GVariant *dict = g_variant_builder_end(&builder);
-
-	g_dbus_connection_call(yBus,
-		"org.freedesktop.PolicyKit1",
-		"/org/freedesktop/PolicyKit1/Authority",
-		"org.freedesktop.PolicyKit1.Authority",
-		"RegisterAuthenticationAgent",
-		g_variant_new("((s@a{sv})ss)",
-			"unix-session",
-			dict,
-			g_getenv("LANG"),
-			POLKIT_AUTH_AGENT_DBUS_PATH),
-		NULL,
-		G_DBUS_CALL_FLAGS_NONE,
-		-1,
-		session->cancel,
-		(GAsyncReadyCallback)on_polkit_auth_agent_registered,
-		NULL);
-}
-
-static void on_polkit_auth_agent_registered(GDBusConnection *yBus, GAsyncResult *res, gpointer userdata)
-{
-	GError *error = NULL;
-	GVariant *ret = g_dbus_connection_call_finish(yBus, res, &error);
-	if(error)
-	{
-		g_critical("Failed to register as PolKit Authentication Agent: %s", error->message);
-		g_clear_error(&error);
-		graphene_session_exit_internal(TRUE);
-		return;
-	}
-
-	g_variant_unref(ret);
- 
-	g_message("Registered as authentication agent!");
-	if(session->hasName)
-	{
-		g_message("Running session from auth registered");
-		run_phase(SESSION_PHASE_STARTUP);
-	}
-}
-
-static void on_ebus_connection_acquired(GObject *source, GAsyncResult *res, gpointer userdata)
-{
-	GError *error = NULL;
-	GDBusConnection *eBus = g_bus_get_finish(res, &error);
-	if(!eBus || error)
-	{
-		g_critical("Failed to acquire Session DBus connection.");
-		g_clear_object(&eBus);
-		g_clear_error(&error);
-		graphene_session_exit_internal(TRUE);
-		return;	
-	}
-	
-	g_message("Acquired Session DBus connection.");
-
-	g_signal_connect(eBus, "closed", G_CALLBACK(on_eybus_connection_lost), NULL);
-	g_dbus_connection_set_exit_on_close(eBus, FALSE);
-	session->eBus = eBus;
-
-	session->dbusSMSkeleton = dbus_session_manager_skeleton_new();
-	connect_dbus_methods();
-	dbus_session_manager_set_session_name(session->dbusSMSkeleton, GRAPHENE_SESSION_NAME);
-	dbus_session_manager_set_session_is_active(session->dbusSMSkeleton, FALSE);
-	// TODO: How does inhibited_actions work
-	//dbus_session_manager_set_inhibited_actions(session->dbusSMSkeleton, ...);
-
-	if(!g_dbus_interface_skeleton_export(G_DBUS_INTERFACE_SKELETON(session->dbusSMSkeleton), eBus, SESSION_DBUS_PATH, NULL))
-	{
-		g_critical("Failed to export SM dbus object.");
-		graphene_session_exit_internal(TRUE);
-		return;
-	}
-
-	session->dbusNameId = g_bus_own_name_on_connection(eBus, 
-		SESSION_DBUS_NAME,
-		G_BUS_NAME_OWNER_FLAGS_REPLACE,
-		on_dbus_name_acquired,
-		on_dbus_name_lost,
-		NULL,
-		NULL);
-}
-
-static void on_eybus_connection_lost(GDBusConnection *eyBus, gboolean remotePeerVanished, GError *error, gpointer userdata)
-{
-	g_critical("Lost connecion to the Session or System DBus.");
-	g_clear_object(&session->yBus);
-	g_clear_object(&session->eBus);
-	graphene_session_exit_internal(TRUE);
-}
-
-static void on_dbus_name_acquired(GDBusConnection *eBus, const gchar *name, void *userdata)
-{
-	session->hasName = TRUE;
-	g_message("Acquired name '%s' on the Session DBus", SESSION_DBUS_NAME);
-
-	// Last part of session bus init sequence
-	// If the system bus sequence has already completed, run the startup phase
-	if(session->yBus && session->phase == SESSION_PHASE_INIT)
-		run_phase(SESSION_PHASE_STARTUP);
-}
-
-static void on_dbus_name_lost(GDBusConnection *eBus, const gchar *name, void *userdata)
-{
-	// Not necessarily fatal if the name is lost but connection isn't, so
-	// keep the session alive. No new clients will be able to register, but
-	// existing clients should be fine, and logout should work.
-	session->hasName = FALSE;
-	g_warning("Lost name on the Session DBus");
-}
-
-static gboolean run_phase_idle(SessionPhase phase)
-{
-	// TODO: Phase timer
-	SessionPhase prevPhase = session->phase;
-	session->phase = phase;
-	switch(phase)
-	{
-	case SESSION_PHASE_STARTUP:
-		if(prevPhase != SESSION_PHASE_INIT)
-			return G_SOURCE_REMOVE;	
-		g_message("------------------------");
-		g_message("Running startup phase");
-		g_message("------------------------");
-		launch_desktop();
-		check_startup_complete();
-		break;
-	case SESSION_PHASE_RUNNING:
-		g_message("------------------------");
-		g_message("Running idle phase");
-		g_message("------------------------");
-		if(session->dbusSMSkeleton)
-		{
-			dbus_session_manager_set_session_is_active(session->dbusSMSkeleton, TRUE);
-			dbus_session_manager_emit_session_running(session->dbusSMSkeleton);
-		}
-		if(prevPhase == SESSION_PHASE_STARTUP)
-		{
-			if(session->startupCb)
-				session->startupCb(session->cbUserdata);
-			launch_apps();
-		}
-		if(!session->statusNotifierWatcher)
-			session->statusNotifierWatcher = graphene_status_notifier_watcher_new();
-		break;
-	case SESSION_PHASE_LOGOUT:
-		g_message("------------------------");
-		g_message("Running logout phase");
-		g_message("------------------------");
-		if(session->dbusSMSkeleton)
-		{
-			dbus_session_manager_set_session_is_active(session->dbusSMSkeleton, FALSE);
-			dbus_session_manager_emit_session_over(session->dbusSMSkeleton);
-		}
-		graphene_session_exit_internal(FALSE);
-		break;
-	}
+	g_message("==== SELF DESTRUCT ====");
+	graphene_session_exit(TRUE);
+	SelfDestructTimeoutId = 0;
 	return G_SOURCE_REMOVE;
 }
 
-static void run_phase(SessionPhase phase)
+static void self_destruct_countdown()
 {
-	g_idle_add((GSourceFunc)run_phase_idle, GINT_TO_POINTER(phase));
-}
-
-static gboolean check_startup_complete()
-{
-	if(session->phase != SESSION_PHASE_STARTUP)
-		return FALSE;
-	g_message("Checking startup complete...");
-	for(GList *it = session->clients; it != NULL; it = it->next)
-	{
-		if(!graphene_session_client_get_is_ready(it->data))
-		{
-			g_message("Client '%s' is not ready\n", graphene_session_client_get_best_name(it->data));
-			return FALSE;
-		}
-	}
-
-	run_phase(SESSION_PHASE_RUNNING);
-	return TRUE;
+	stop_self_destruct();
+	SelfDestructTimeoutId = g_timeout_add_seconds(10, (GSourceFunc)on_self_destruct, NULL);
 }
 
 
@@ -547,7 +696,7 @@ static gboolean on_client_register(DBusSessionManager *object, GDBusMethodInvoca
 		session->clients = g_list_prepend(session->clients, client);
 	}
 
-	graphene_session_client_register(client, sender, appId);
+	graphene_session_client_register(client, sender, appId, FALSE);
 	const gchar *objectPath = graphene_session_client_get_object_path(client);
 	
 	if(objectPath != NULL)
@@ -588,19 +737,27 @@ static void on_client_notify_complete(GrapheneSessionClient *client)
 {
 	if(!graphene_session_client_get_is_complete(client))
 		return;
-	g_message("Client %s is complete.", graphene_session_client_get_best_name(client));
+	g_message("Client %s is complete. Remain: %i", graphene_session_client_get_best_name(client), g_list_length(session->clients)-1);
 	session->clients = g_list_remove(session->clients, client);
 	g_object_unref(client);
 	
-	if(!check_startup_complete())
+	
+	if(session->phase == SESSION_PHASE_STARTUP)
+		check_startup_complete();
+	else if(session->phase == SESSION_PHASE_EXIT && session->clients == NULL)
 	{
-		// If all clients die, exit
-		// This will happen at the end of a successful Logout
-		// Exit on idle because on_client_notify_complete can be called indirectly from
-		// on_client_register, a DBus callback.
-		if(session->clients == NULL)
-			graphene_session_exit_internal_on_idle(FALSE);
+		g_message("exit");
+		graphene_session_exit_on_idle(FALSE);
 	}
+	//if(!check_startup_complete())
+	//{
+	//	// If all clients die, exit
+	//	// This will happen at the end of a successful Logout
+	//	// Exit on idle because on_client_notify_complete can be called indirectly from
+	//	// on_client_register, a DBus callback.
+	//	if(session->clients == NULL)
+	//		graphene_session_exit_internal_on_idle(FALSE);
+	//}
 }
 
 
@@ -682,50 +839,6 @@ static GHashTable * list_autostarts()
   return desktopInfoTable;
 }
 
-static void launch_desktop()
-{
-	GHashTable *autostarts = list_autostarts();
-	GHashTableIter iter;
-	gpointer key, value;
-	g_hash_table_iter_init(&iter, autostarts);
-	while(g_hash_table_iter_next(&iter, &key, &value))
-	{    
-		GDesktopAppInfo *desktopInfo = G_DESKTOP_APP_INFO(value);
-    	gchar *phase = g_desktop_app_info_get_string(desktopInfo, "X-GNOME-Autostart-Phase");
-	
-		// Just launch all of the startup phases at once. Maybe give it order later,
-		// but it doesn't make much difference.
-		if(g_strcmp0(phase, "Initialization") == 0
-		|| g_strcmp0(phase, "Panel") == 0
-		|| g_strcmp0(phase, "Desktop") == 0)
-		{
-			launch_autostart(desktopInfo);
-		}
-	}
-}
-
-static void launch_apps()
-{
-	GHashTable *autostarts = list_autostarts();
-	GHashTableIter iter;
-	gpointer key, value;
-	g_hash_table_iter_init(&iter, autostarts);
-	while(g_hash_table_iter_next(&iter, &key, &value))
-	{    
-		GDesktopAppInfo *desktopInfo = G_DESKTOP_APP_INFO(value);
-    	gchar *phase = g_desktop_app_info_get_string(desktopInfo, "X-GNOME-Autostart-Phase");
-
-		// Only launch applications not launched in launch_desktop
-		if(g_strcmp0(phase, "Initialization") != 0
-		&& g_strcmp0(phase, "WindowManager") != 0
-		&& g_strcmp0(phase, "Panel") != 0
-		&& g_strcmp0(phase, "Desktop") != 0)
-		{
-			launch_autostart(desktopInfo);
-		}
-	}
-}
-
 static void launch_autostart(GDesktopAppInfo *desktopInfo)
 {
 	GrapheneSessionClient *client = graphene_session_client_new(session->eBus, NULL);
@@ -775,14 +888,40 @@ static void launch_autostart(GDesktopAppInfo *desktopInfo)
 
 static gboolean on_client_inhibit(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *appId, guint toplevelXId, const gchar *reason, guint flags, gpointer userdata)
 {
-	// TODO
-	return FALSE;
+	const gchar *sender = g_dbus_method_invocation_get_sender(invocation);
+	GrapheneSessionClient *client = find_client_from_given_info(NULL, NULL, appId, NULL);
+
+	// Create and register the client
+	if(!client)
+	{
+		client = graphene_session_client_new(session->eBus, NULL);
+		g_object_connect(client,
+			"signal::notify::complete", on_client_notify_complete, NULL,
+			NULL);
+		session->clients = g_list_prepend(session->clients, client);
+		graphene_session_client_register(client, sender, appId, TRUE);
+		const gchar *objectPath = graphene_session_client_get_object_path(client);
+		if(objectPath)
+		{
+			dbus_session_manager_emit_client_added(session->dbusSMSkeleton, objectPath);
+			g_message("Client %s registered.", graphene_session_client_get_best_name(client));
+			on_client_notify_complete(client);
+		}
+	}
+
+	guint cookie = graphene_session_client_add_inhibition(client, reason, flags);
+	dbus_session_manager_complete_inhibit(object, invocation, cookie);
+	return TRUE;
 }
 
-static gboolean on_client_uninhibit(DBusSessionManager *object, GDBusMethodInvocation *invocation, gint inhibit_cookie, gpointer userdata)
+static gboolean on_client_uninhibit(DBusSessionManager *object, GDBusMethodInvocation *invocation, guint cookie, gpointer userdata)
 {
-	// TODO
-	return FALSE;
+	// Try to remove from each client
+	for(GList *it = session->clients; it != NULL; it = it->next)
+		graphene_session_client_remove_inhibition(it->data, cookie);
+	
+	dbus_session_manager_complete_uninhibit(object, invocation);
+	return TRUE;
 }
 
 
@@ -822,7 +961,7 @@ static gboolean on_dbus_initialization_error(DBusSessionManager *object, GDBusMe
 	if(fatal && session->phase <= SESSION_PHASE_STARTUP)
 	{
 		g_critical("Fatal External Initialization Error: %s", message);
-		graphene_session_exit_internal_on_idle(TRUE);
+		graphene_session_exit_on_idle(TRUE);
 	}
 	else
 	{
@@ -908,14 +1047,16 @@ static gboolean on_dbus_get_is_autostart_condition_handled(DBusSessionManager *o
 
 static gboolean on_dbus_shutdown(DBusSessionManager *object, GDBusMethodInvocation *invocation, gpointer userdata)
 {
-	// TODO
-	return FALSE;
+	dbus_session_manager_complete_shutdown(object, invocation);
+	do_exit(EXIT_SHUTDOWN, FALSE);
+	return TRUE;
 }
 
 static gboolean on_dbus_reboot(DBusSessionManager *object, GDBusMethodInvocation *invocation, gpointer userdata)
 {
-	// TODO
-	return FALSE;
+	dbus_session_manager_complete_reboot(object, invocation);
+	do_exit(EXIT_REBOOT, FALSE);
+	return TRUE;
 }
 
 static gboolean on_dbus_get_can_shutdown(DBusSessionManager *object, GDBusMethodInvocation *invocation, gpointer userdata)
@@ -934,7 +1075,7 @@ static gboolean on_dbus_logout(DBusSessionManager *object, GDBusMethodInvocation
 
 static gboolean on_dbus_get_is_session_running(DBusSessionManager *object, GDBusMethodInvocation *invocation, gpointer userdata)
 {
-	gboolean running = session && session->phase == SESSION_PHASE_RUNNING;
+	gboolean running = session && session->phase == SESSION_PHASE_IDLE;
 	dbus_session_manager_complete_is_session_running(object, invocation, running);
 	return TRUE;
 }

@@ -42,11 +42,11 @@ void          graphene_session_client_term(GrapheneSessionClient *self);
 void          graphene_session_client_kill(GrapheneSessionClient *self);
 void          graphene_session_client_restart(GrapheneSessionClient *self);
 
-void          graphene_session_client_register(GrapheneSessionClient *self, const gchar *sender, const gchar *appId);
+void          graphene_session_client_register(GrapheneSessionClient *self, const gchar *sender, const gchar *appId, gboolean implicit);
 void          graphene_session_client_unregister(GrapheneSessionClient *self);
 
 gboolean      graphene_session_client_query_end_session(GrapheneSessionClient *self, gboolean forced);
-void          graphene_session_client_end_session(GrapheneSessionClient *self, gboolean forced);
+void          graphene_session_client_end_session(GrapheneSessionClient *self);
 
 /*
  * Gets properties of the client. Some of these may not be available, in which
@@ -94,6 +94,10 @@ gboolean      graphene_session_client_get_is_alive(GrapheneSessionClient *self);
 gboolean      graphene_session_client_get_is_ready(GrapheneSessionClient *self);
 gboolean      graphene_session_client_get_is_failed(GrapheneSessionClient *self);
 gboolean      graphene_session_client_get_is_complete(GrapheneSessionClient *self);
+
+guint graphene_session_client_add_inhibition(GrapheneSessionClient *self, const gchar *reason, guint flags);
+void graphene_session_client_remove_inhibition(GrapheneSessionClient *self, guint cookie);
+gboolean graphene_session_client_is_inhibited(GrapheneSessionClient *self);
 
 G_END_DECLS
 

@@ -24,6 +24,13 @@
 #define CLIENT_OBJECT_PATH "/org/gnome/SessionManager/Client"
 #define MAX_RESTARTS 5
 
+typedef struct
+{
+	guint cookie;
+	gchar *reason;
+	guint flags;
+} Inhibition;
+
 struct _GrapheneSessionClient
 {
 	GObject parent;
@@ -51,6 +58,7 @@ struct _GrapheneSessionClient
 	DBusSessionManagerClientPrivate *dbusPClientSkeleton;
 	guint busWatchId;
 	GDBusConnection *connection;
+	gboolean implicitRegistration; // FALSE if the client explicity registered
 	
 	// Process info (set when spawned or if available)
 	GPid processId;
@@ -63,6 +71,8 @@ struct _GrapheneSessionClient
 	
 	// Flags
 	gboolean alive, ready, failed, complete;
+
+	GArray *inhibitions;
 };
 
 enum
@@ -186,6 +196,7 @@ GrapheneSessionClient* graphene_session_client_new(GDBusConnection *connection, 
 
 static void graphene_session_client_init(GrapheneSessionClient *self)
 {
+	self->inhibitions = g_array_new(FALSE, FALSE, sizeof(Inhibition));
 }
 
 static void graphene_session_client_dispose(GObject *self_)
@@ -206,6 +217,18 @@ static void graphene_session_client_dispose(GObject *self_)
 	g_clear_pointer(&self->condition, g_free);
 	g_clear_pointer(&self->icon, g_free);
 	g_clear_pointer(&self->id, g_free);
+
+	if(self->inhibitions)
+	{
+		for(guint i=0;i<self->inhibitions->len;++i)
+		{
+			Inhibition *inh = &g_array_index(self->inhibitions, Inhibition, i);
+			if(inh)
+				g_free(inh->reason);
+		}
+		g_array_free(self->inhibitions, TRUE);
+		self->inhibitions = NULL;
+	}
 
 	G_OBJECT_CLASS(graphene_session_client_parent_class)->dispose(G_OBJECT(self));
 }
@@ -480,6 +503,7 @@ void graphene_session_client_term(GrapheneSessionClient *self)
 	g_debug("requesting term client '%s'", graphene_session_client_get_best_name(self));
 	if(self->connection && self->dbusName && self->objectPath)
 	{
+		g_message("sending stop");
 		g_dbus_connection_emit_signal(self->connection, self->dbusName, self->objectPath,
 			"org.gnome.SessionManager.ClientPrivate", "Stop", NULL, NULL);
 	}
@@ -528,13 +552,14 @@ void graphene_session_client_restart(GrapheneSessionClient *self)
  * Registration
  */
 
-void graphene_session_client_register(GrapheneSessionClient *self, const gchar *sender, const gchar *appId)
+void graphene_session_client_register(GrapheneSessionClient *self, const gchar *sender, const gchar *appId, gboolean implicit)
 {
 	g_return_if_fail(GRAPHENE_IS_SESSION_CLIENT(self));
 	graphene_session_client_unregister_internal(self);
 
 	g_debug("Registering client '%s' with sender '%s', appId '%s', and objectPath '%s'", self->id, sender, appId, self->objectPath);
 
+	self->implicitRegistration = implicit;
 	set_alive(self, TRUE);
 	set_ready(self, FALSE);
 
@@ -836,34 +861,64 @@ static void update_condition(GrapheneSessionClient *self)
 	run_condition(self);
 }
 
-/*
-gboolean graphene_session_client_query_end_session(GrapheneSessionClient *self, gboolean forced)
+//gboolean graphene_session_client_query_end_session(GrapheneSessionClient *self, gboolean forced)
+//{
+//	if(self->objectPath)
+//	{
+//		g_dbus_connection_emit_signal(self->connection, self->dbusName, self->objectPath,
+//			"org.gnome.SessionManager.ClientPrivate", "QueryEndSession", g_variant_new("(u)", forced == TRUE), NULL);
+//		return TRUE;
+//	}
+//	
+//	return FALSE;
+//}
+
+//void graphene_session_client_end_session(GrapheneSessionClient *self, gboolean forced)
+//{
+//	g_message("end session on %s", graphene_session_client_get_best_name(self));
+//	self->forceNextRestart = FALSE;
+//	
+//	g_message("%s", self->objectPath);
+//	if(self->objectPath)
+//	{
+//		g_message("emit end session");
+//		g_dbus_connection_emit_signal(self->connection, self->dbusName, self->objectPath, "org.gnome.SessionManager.ClientPrivate", "EndSession", g_variant_new("(u)", TRUE), NULL);
+//	}
+//	else if(self->processId)
+//	{
+//		g_message("send kill");
+//		kill(self->processId, SIGKILL);
+//	}
+//	g_clear_object(&self->conditionMonitor);
+//	//destroy_client_info(self); 
+//	//try_set_complete(self, TRUE);
+//}
+
+void graphene_session_client_end_session(GrapheneSessionClient *self)
 {
-	if(self->objectPath)
+	g_return_if_fail(GRAPHENE_IS_SESSION_CLIENT(self));
+	g_message("requesting term client '%s'", graphene_session_client_get_best_name(self));
+	g_clear_object(&self->conditionMonitor);
+	if(!self->alive)
 	{
-		g_dbus_connection_emit_signal(self->connection, self->dbusName, self->objectPath,
-			"org.gnome.SessionManager.ClientPrivate", "QueryEndSession", g_variant_new("(u)", forced == TRUE), NULL);
-		return TRUE;
+		g_message("already ded");
+		try_set_complete(self, TRUE);
+		return;
 	}
-	
-	return FALSE;
+	if(self->connection && self->dbusName && self->objectPath && !self->implicitRegistration)
+	{
+		g_message("sending end session");
+		g_dbus_connection_emit_signal(self->connection, self->dbusName, self->objectPath,
+			"org.gnome.SessionManager.ClientPrivate", "EndSession", NULL, NULL);
+	}
+	else if(self->processId)
+	{
+		g_debug(" - Client '%s' is not registered. Sending SIGTERM to %i to stop client.", graphene_session_client_get_best_name(self), self->processId);
+		kill(self->processId, SIGKILL);
+	}
 }
 
-void graphene_session_client_end_session(GrapheneSessionClient *self, gboolean forced)
-{
-	g_debug("end session on %s", graphene_session_client_get_best_name(self));
-	self->forceNextRestart = FALSE;
-	
-	if(self->objectPath)
-		g_dbus_connection_emit_signal(self->connection, self->dbusName, self->objectPath,
-			"org.gnome.SessionManager.ClientPrivate", "EndSession", g_variant_new("(u)", forced == TRUE), NULL);
-	else if(self->processId)
-		kill(self->processId, SIGKILL);
-	g_clear_object(&self->conditionMonitor);
-	destroy_client_info(self); 
-	g_signal_emit_by_name(self, "complete");
-}
-*/
+
 
 
 /*
@@ -991,10 +1046,13 @@ static gboolean on_dbus_restart(DBusSessionManagerClient *object, GDBusMethodInv
 	return TRUE;
 }
 
-static gboolean on_dbus_end_session_response(DBusSessionManagerClient *object, GDBusMethodInvocation *invocation, gboolean isOk, const gchar *reason, GrapheneSessionClient *self)
+static gboolean on_dbus_end_session_response(DBusSessionManagerClientPrivate *object, GDBusMethodInvocation *invocation, gboolean isOk, const gchar *reason, GrapheneSessionClient *self)
 {
 	g_return_val_if_fail(GRAPHENE_IS_SESSION_CLIENT(self), FALSE);
-	// TODO
+	g_message("response: %i (%s)", isOk, graphene_session_client_get_best_name(self));
+	try_set_complete(self, TRUE);
+	//g_signal_emit(self, signals[SIGNAL_END_SESSION_RESPONSE], 0, isOk, reason);
+	dbus_session_manager_client_private_complete_end_session_response(object, invocation);
 	return TRUE;
 }
 
@@ -1018,4 +1076,34 @@ void graphene_session_client_lost_dbus(GrapheneSessionClient *self)
 {
 	g_return_if_fail(GRAPHENE_IS_SESSION_CLIENT(self));
 	self->connection = NULL;
+}
+
+guint graphene_session_client_add_inhibition(GrapheneSessionClient *self, const gchar *reason, guint flags)
+{
+	g_return_val_if_fail(GRAPHENE_IS_SESSION_CLIENT(self), 0);
+	static guint cookie = 0;
+	Inhibition inh = { ++cookie, g_strdup(reason), flags };
+	g_array_append_val(self->inhibitions, inh);
+	return cookie;
+}
+
+void graphene_session_client_remove_inhibition(GrapheneSessionClient *self, guint cookie)
+{
+	g_return_if_fail(GRAPHENE_IS_SESSION_CLIENT(self));
+	for(guint i=0;i<self->inhibitions->len;++i)
+	{
+		Inhibition *inh = &g_array_index(self->inhibitions, Inhibition, i);
+		if(inh && inh->cookie == cookie)
+		{
+			g_free(inh->reason);
+			g_array_remove_index_fast(self->inhibitions, i);
+			return;
+		}	
+	}
+}
+
+gboolean graphene_session_client_is_inhibited(GrapheneSessionClient *self)
+{
+	g_return_val_if_fail(GRAPHENE_IS_SESSION_CLIENT(self), FALSE);
+	return self->inhibitions->len > 0;
 }

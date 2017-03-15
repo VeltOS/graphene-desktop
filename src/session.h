@@ -31,22 +31,16 @@ typedef void (*CSMQuitCallback)(gboolean failed, gpointer userdata);
 void graphene_session_init(CSMStartupCompleteCallback startupCb, CSMDialogCallback dialogCb, CSMQuitCallback quitCb, gpointer userdata);
 
 /*
+ * Immediately exits the session, attempting to close clients.
+ * Pass TRUE to failed if this exit is due to an error.
+ * Return value for internal purposes. Ignore.
+ */
+gboolean graphene_session_exit(gboolean failed);
+
+/*
  * Shows the logout dialog, same as the logout DBus command.
  */
 void graphene_session_request_logout();
-
-/*
- * Starts the logout phase, which asks all clients to close and eventually
- * ends the session. If any clients reject the logout, the phase is cancelled.
- * A successful logout will call CSMQuitCallback with failed set to FALSE.
- */
-void graphene_session_logout();
-
-/*
- * Immediately exits the session, closing all programs without saving.
- * This will call the CSMQuitCallback with failed set to TRUE.
- */
-void graphene_session_exit();
 
 G_END_DECLS
 

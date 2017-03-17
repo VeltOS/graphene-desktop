@@ -18,6 +18,7 @@ struct _CmkWidgetPrivate
 
 	gchar *backgroundColorName;
 	gboolean drawBackground;
+	gboolean tabbable;
 
 	gboolean emittingStyleChanged;
 	gboolean disposed; // Various callbacks (ex clutter canvas draws) like to emit even after their actor has been disposed. This is checked to avoid runtime "CRITICAL" messages on disposed objects (and unnecessary processing)
@@ -27,6 +28,7 @@ enum
 {
 	// TODO: Make all style properties into GObject properties
 	PROP_BACKGROUND_COLOR_NAME = 1,
+	PROP_TABBABLE,
 	PROP_LAST
 };
 
@@ -51,6 +53,7 @@ static void update_actual_style_parent(CmkWidget *self);
 static void on_style_changed(CmkWidget *self);
 static void on_background_changed(CmkWidget *self);
 static void update_named_background_color(CmkWidget *self);
+static gboolean on_key_released(ClutterActor *self, ClutterKeyEvent *event);
 
 G_DEFINE_TYPE_WITH_PRIVATE(CmkWidget, cmk_widget, CLUTTER_TYPE_ACTOR);
 #define PRIVATE(widget) ((CmkWidgetPrivate *)cmk_widget_get_instance_private(widget))
@@ -79,11 +82,13 @@ static void cmk_widget_class_init(CmkWidgetClass *class)
 	base->set_property = cmk_widget_set_property;
 	
 	CLUTTER_ACTOR_CLASS(class)->parent_set = on_parent_changed;
+	CLUTTER_ACTOR_CLASS(class)->key_release_event = on_key_released;
 
 	class->style_changed = on_style_changed;
 	class->background_changed = on_background_changed;
 
 	properties[PROP_BACKGROUND_COLOR_NAME] = g_param_spec_string("background-color-name", "background-color-name", "Named background color using CmkStyle", NULL, G_PARAM_READWRITE);
+	properties[PROP_TABBABLE] = g_param_spec_string("tabbable", "tabbable", "TRUE if this widget can be tabbed to", FALSE, G_PARAM_READWRITE);
 
 	g_object_class_install_properties(base, PROP_LAST, properties);
 	
@@ -130,6 +135,9 @@ static void cmk_widget_set_property(GObject *self_, guint propertyId, const GVal
 	case PROP_BACKGROUND_COLOR_NAME:
 		cmk_widget_set_background_color_name(self, g_value_get_string(value));
 		break;
+	case PROP_TABBABLE:
+		cmk_widget_set_tabbable(self, g_value_get_boolean(value));
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(self, propertyId, pspec);
 		break;
@@ -145,6 +153,9 @@ static void cmk_widget_get_property(GObject *self_, guint propertyId, GValue *va
 	{
 	case PROP_BACKGROUND_COLOR_NAME:
 		g_value_set_string(value, cmk_widget_get_background_color_name(self));
+		break;
+	case PROP_TABBABLE:
+		g_value_set_boolean(value, cmk_widget_get_tabbable(self));
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(self, propertyId, pspec);
@@ -475,4 +486,96 @@ void cmk_scale_actor_box(ClutterActorBox *b, gfloat scale, gboolean move)
 
 	b->x2 = b->x1 + width*scale;
 	b->y2 = b->y1 + height*scale;
+}
+
+static GList *tabStack = NULL;
+
+void cmk_widget_push_tab_modal(CmkWidget *widget)
+{
+	tabStack = g_list_prepend(tabStack, widget);
+}
+
+void cmk_widget_pop_tab_modal()
+{
+	tabStack = g_list_delete_link(tabStack, tabStack);
+}
+
+/*
+ * get_next_tabstop finds the next CmkWidget in the Clutter scene
+ * graph which is tabbable. Given a starting actor, it does a depth-
+ * first-search on all of its child actors (i.e. excluding itself),
+ * and if that fails, begins to do an "inverse" depth-first search,
+ * recursively running depth-first searches on siblings and parent
+ * nodes. Returns NULL if there are no more tabstops in the graph.
+ */
+static ClutterActor * get_next_tabstop_dfs(ClutterActor *start)
+{
+	if(CMK_IS_WIDGET(start) && cmk_widget_get_tabbable(CMK_WIDGET(start)))
+		return start;
+	ClutterActor *next = clutter_actor_get_first_child(start);
+	while(next)
+	{
+		ClutterActor *stop = get_next_tabstop_dfs(next);
+		if(stop)
+			return stop;
+		next = clutter_actor_get_next_sibling(next);
+	}
+	return NULL;
+}
+
+static ClutterActor * get_next_tabstop_up(ClutterActor *start)
+{
+	if(!start)
+		return NULL;
+	ClutterActor *next = start;
+	while((next = clutter_actor_get_next_sibling(next)))
+	{
+		ClutterActor *stop = get_next_tabstop_dfs(next);
+		if(stop)
+			return stop;
+	}
+	
+	ClutterActor *parent = clutter_actor_get_parent(start);
+	if(parent)
+		return get_next_tabstop_up(parent);
+	return NULL;
+}
+
+static ClutterActor * get_next_tabstop(ClutterActor *start)
+{
+	ClutterActor *next = clutter_actor_get_first_child(start);
+	while(next)
+	{
+		ClutterActor *stop = get_next_tabstop_dfs(next);
+		if(stop)
+			return stop;
+		next = clutter_actor_get_next_sibling(next);
+	}
+	
+	return get_next_tabstop_up(start);
+}
+
+static gboolean on_key_released(ClutterActor *self, ClutterKeyEvent *event)
+{
+	if(event->keyval == CLUTTER_KEY_Tab)
+	{
+		ClutterActor *a = get_next_tabstop(event->source);
+		if(!a)
+			a = get_next_tabstop(clutter_actor_get_stage(event->source));
+		clutter_actor_grab_key_focus(a);
+		return CLUTTER_EVENT_STOP;
+	}
+	return CLUTTER_EVENT_PROPAGATE;
+}
+
+void cmk_widget_set_tabbable(CmkWidget *self, gboolean tabbable)
+{
+	g_return_if_fail(CMK_IS_WIDGET(self));
+	PRIVATE(self)->tabbable = tabbable;
+}
+
+gboolean cmk_widget_get_tabbable(CmkWidget *self)
+{
+	g_return_val_if_fail(CMK_IS_WIDGET(self), FALSE);
+	return PRIVATE(self)->tabbable;
 }

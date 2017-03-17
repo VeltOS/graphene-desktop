@@ -153,6 +153,12 @@ void cairo_set_source_clutter_color(cairo_t *cr, const ClutterColor *color);
  */
 void cmk_scale_actor_box(ClutterActorBox *b, gfloat scale, gboolean move);
 
+void cmk_widget_push_tab_modal(CmkWidget *widget);
+void cmk_widget_pop_tab_modal();
+
+void cmk_widget_set_tabbable(CmkWidget *widget, gboolean tabbable);
+gboolean cmk_widget_get_tabbable(CmkWidget *widget);
+
 G_END_DECLS
 
 #endif

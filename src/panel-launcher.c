@@ -77,6 +77,19 @@ static void graphene_launcher_popup_init(GrapheneLauncherPopup *self)
 	cmk_widget_set_background_color_name(self->window, "background");
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->window));
 
+	// TODO: Search bar not tabbable because not a CmkWidget
+	self->searchBox = CLUTTER_TEXT(clutter_text_new());
+	clutter_text_set_editable(self->searchBox, TRUE);
+	clutter_text_set_activatable(self->searchBox, TRUE);
+	clutter_actor_set_reactive(CLUTTER_ACTOR(self->searchBox), TRUE);
+	g_signal_connect(self->searchBox, "notify::mapped", G_CALLBACK(on_search_box_mapped), NULL);
+	g_signal_connect_swapped(self->searchBox, "text-changed", G_CALLBACK(on_search_box_text_changed), self);
+	g_signal_connect_swapped(self->searchBox, "activate", G_CALLBACK(on_search_box_activate), self);
+	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->searchBox));
+
+	self->searchSeparator = separator_new();
+	clutter_actor_add_child(CLUTTER_ACTOR(self), self->searchSeparator);
+
 	// Despite the scroll box looking like its inside the popup window, it
 	// isn't actually a child of the window actor; it is a child of self.
 	// This makes allocation/sizing easer, and helps keep the scroll window
@@ -94,18 +107,6 @@ static void graphene_launcher_popup_init(GrapheneLauncherPopup *self)
 	clutter_actor_set_x_align(CLUTTER_ACTOR(self->searchIcon), CLUTTER_ACTOR_ALIGN_CENTER);
 	clutter_actor_set_y_align(CLUTTER_ACTOR(self->searchIcon), CLUTTER_ACTOR_ALIGN_CENTER);
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->searchIcon));
-
-	self->searchBox = CLUTTER_TEXT(clutter_text_new());
-	clutter_text_set_editable(self->searchBox, TRUE);
-	clutter_text_set_activatable(self->searchBox, TRUE);
-	clutter_actor_set_reactive(CLUTTER_ACTOR(self->searchBox), TRUE);
-	g_signal_connect(self->searchBox, "notify::mapped", G_CALLBACK(on_search_box_mapped), NULL);
-	g_signal_connect_swapped(self->searchBox, "text-changed", G_CALLBACK(on_search_box_text_changed), self);
-	g_signal_connect_swapped(self->searchBox, "activate", G_CALLBACK(on_search_box_activate), self);
-	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->searchBox));
-
-	self->searchSeparator = separator_new();
-	clutter_actor_add_child(CLUTTER_ACTOR(self), self->searchSeparator);
 
 	PangoFontDescription *desc = pango_font_description_new();
 	pango_font_description_set_size(desc, 16*PANGO_SCALE); // 16pt

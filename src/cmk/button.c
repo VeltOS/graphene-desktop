@@ -47,6 +47,9 @@ static void on_style_changed(CmkWidget *self_);
 static void on_background_changed(CmkWidget *self_);
 static void on_size_changed(ClutterActor *self, GParamSpec *spec, ClutterCanvas *canvas);
 static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, int height, CmkButton *self);
+static gboolean on_key_released(ClutterActor *self_, ClutterKeyEvent *event);
+static void on_key_focus(ClutterActor *self_);
+static void on_key_unfocus(ClutterActor *self_);
 
 G_DEFINE_TYPE_WITH_PRIVATE(CmkButton, cmk_button, CMK_TYPE_WIDGET);
 #define PRIVATE(button) ((CmkButtonPrivate *)cmk_button_get_instance_private(button))
@@ -82,6 +85,9 @@ static void cmk_button_class_init(CmkButtonClass *class)
 	actorClass->get_preferred_width = cmk_button_get_preferred_width;
 	actorClass->get_preferred_height = cmk_button_get_preferred_height;
 	actorClass->allocate = cmk_button_allocate;
+	actorClass->key_release_event = on_key_released;
+	actorClass->key_focus_in = on_key_focus;
+	actorClass->key_focus_out = on_key_unfocus;
 
 	CMK_WIDGET_CLASS(class)->style_changed = on_style_changed;
 	CMK_WIDGET_CLASS(class)->background_changed = on_background_changed;
@@ -103,6 +109,7 @@ static void on_anim_canvas(CmkButton *self)
 
 static void cmk_button_init(CmkButton *self)
 {
+	cmk_widget_set_tabbable(CMK_WIDGET(self), TRUE);
 	ClutterContent *canvas = clutter_canvas_new();
 
 	CmkButtonPrivate *private = PRIVATE(self);
@@ -340,7 +347,7 @@ static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, in
 
 	gdouble clickAnimProgress = clutter_timeline_get_progress(PRIVATE(self)->clickAnim);
 
-	if(PRIVATE(self)->hover || PRIVATE(self)->selected || (clickAnimProgress > 0 && clickAnimProgress < 1))
+	if(PRIVATE(self)->hover || PRIVATE(self)->selected || clutter_actor_has_key_focus(CLUTTER_ACTOR(self)) || (clickAnimProgress > 0 && clickAnimProgress < 1))
 	{
 		if(PRIVATE(self)->type == CMK_BUTTON_TYPE_BEVELED || PRIVATE(self)->type == CMK_BUTTON_TYPE_CIRCLE)
 		{
@@ -466,4 +473,28 @@ const gchar * cmk_button_get_name(CmkButton *self)
 	if(name)
 		return name;
 	return cmk_button_get_text(self);
+}
+
+static gboolean on_key_released(ClutterActor *self_, ClutterKeyEvent *event)
+{
+	if(event->keyval == CLUTTER_KEY_Return)
+	{
+		clutter_timeline_stop(PRIVATE(CMK_BUTTON(self_))->clickAnim);
+		clutter_timeline_start(PRIVATE(CMK_BUTTON(self_))->clickAnim);
+		g_signal_emit(self_, signals[SIGNAL_ACTIVATE], 0);
+		return CLUTTER_EVENT_STOP;
+	}
+	return CLUTTER_EVENT_PROPAGATE;
+}
+
+static void on_key_focus(ClutterActor *self_)
+{
+	//CmkButtonPrivate *private = PRIVATE(CMK_BUTTON(self_));
+	clutter_content_invalidate(clutter_actor_get_content(self_));
+}
+
+static void on_key_unfocus(ClutterActor *self_)
+{
+	//CmkButtonPrivate *private = PRIVATE(CMK_BUTTON(self_));
+	clutter_content_invalidate(clutter_actor_get_content(self_));
 }

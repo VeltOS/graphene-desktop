@@ -463,7 +463,7 @@ static void do_exit(ExitType exitType, gboolean force);
 
 void graphene_session_request_logout()
 {	
-	GrapheneDialog *dialog = graphene_dialog_new_simple("How would you like to exit?\n(Restart and Shutdown not yet implemented)", NULL, "Cancel", "Logout", "Restart", "Shutdown", NULL);
+	GrapheneDialog *dialog = graphene_dialog_new_simple(NULL, NULL, "Cancel", "Logout", "Restart", "Shutdown", NULL);
 	g_signal_connect(dialog, "select", G_CALLBACK(on_logout_dialog_close), NULL);
 	session->dialogCb(CLUTTER_ACTOR(dialog), session->cbUserdata);
 }

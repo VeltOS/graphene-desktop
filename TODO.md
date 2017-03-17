@@ -1,6 +1,6 @@
 - Session Manager
- - [ ] Restart/shutdown/sleep
- - [ ] Logout inhibitors
+ - [x] Restart/shutdown/sleep
+ - [x] Logout inhibitors
  - [ ] User selection on PolKit dialog
  - [ ] Screensaver
  - [ ] Brightness control GUI

@@ -32,6 +32,12 @@ struct _CmkWidgetClass
 	 * changes. Must chain up to parent class.
 	 */
 	void (*background_changed) (CmkWidget *self);
+
+	/*
+	 * Emitted when a CmkWidget in the actor heirarchy below this widget
+	 * gains key focus. Chain up to parent class if event goes unhandled.
+	 */
+	void (*key_focus_changed) (CmkWidget *self, ClutterActor *newfocus);
 };
 
 /*
@@ -158,6 +164,11 @@ void cmk_widget_pop_tab_modal();
 
 void cmk_widget_set_tabbable(CmkWidget *widget, gboolean tabbable);
 gboolean cmk_widget_get_tabbable(CmkWidget *widget);
+
+guint cmk_redirect_keyboard_focus(ClutterActor *actor, ClutterActor *redirection);
+guint cmk_focus_on_mapped(ClutterActor *actor);
+void cmk_focus_stack_push(CmkWidget *widget);
+void cmk_focus_stack_pop(CmkWidget *widget);
 
 G_END_DECLS
 

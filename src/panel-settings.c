@@ -9,6 +9,7 @@
 #include "cmk/button.h"
 #include "cmk/cmk-icon.h"
 #include "cmk/shadow.h"
+#include "cmk/cmk-scroll-box.h"
 #include <act/act.h>
 
 #define PANEL_WIDTH 300
@@ -22,7 +23,7 @@ struct _GrapheneSettingsPopup
 	
 	CmkShadow *sdc;
 	CmkWidget *window;
-	ClutterScrollActor *scroll;
+	CmkScrollBox *scroll;
 	CmkWidget *infoBox;
 	CmkButton *logoutButton;
 	
@@ -31,10 +32,7 @@ struct _GrapheneSettingsPopup
 	ActUser *user;
 	guint notifyUserChangedId;
 	guint notifyIsLoadedId;
-
-	gdouble scrollAmount;
 };
-
 
 G_DEFINE_TYPE(GrapheneSettingsPopup, graphene_settings_popup, CMK_TYPE_WIDGET)
 
@@ -42,7 +40,6 @@ G_DEFINE_TYPE(GrapheneSettingsPopup, graphene_settings_popup, CMK_TYPE_WIDGET)
 static void graphene_settings_popup_dispose(GObject *self_);
 static void graphene_settings_popup_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags);
 static void on_style_changed(CmkWidget *self_);
-static gboolean on_scroll(ClutterScrollActor *scroll, ClutterScrollEvent *event, GrapheneSettingsPopup *self);
 static void on_logout_button_activate(CmkButton *button, GrapheneSettingsPopup *self);
 static void on_user_manager_notify_loaded(GrapheneSettingsPopup *self);
 static ClutterActor * separator_new();
@@ -82,13 +79,6 @@ static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
 	cmk_widget_set_background_color_name(self->window, "background");
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->window));
 
-	self->scroll = CLUTTER_SCROLL_ACTOR(clutter_scroll_actor_new());
-	clutter_scroll_actor_set_scroll_mode(self->scroll, CLUTTER_SCROLL_VERTICALLY);
-	clutter_actor_set_layout_manager(CLUTTER_ACTOR(self->scroll), clutter_vertical_box_new());
-	clutter_actor_set_reactive(CLUTTER_ACTOR(self->scroll), TRUE);
-	g_signal_connect(self->scroll, "scroll-event", G_CALLBACK(on_scroll), self);
-	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->scroll));
-	
 	self->infoBox = cmk_widget_new();
 	clutter_actor_set_layout_manager(CLUTTER_ACTOR(self->infoBox), clutter_vertical_box_new());
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->infoBox));
@@ -107,6 +97,11 @@ static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
 
 	clutter_actor_add_child(CLUTTER_ACTOR(self->infoBox), separator_new());
 
+	self->scroll = cmk_scroll_box_new(CLUTTER_SCROLL_VERTICALLY);
+	clutter_actor_set_layout_manager(CLUTTER_ACTOR(self->scroll), clutter_vertical_box_new());
+	clutter_actor_set_reactive(CLUTTER_ACTOR(self->scroll), TRUE);
+	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->scroll));
+	
 	enum_settings_widgets(self);
 
 	self->userManager = act_user_manager_get_default();
@@ -160,32 +155,6 @@ static void on_style_changed(CmkWidget *self_)
 
 	clutter_actor_queue_relayout(CLUTTER_ACTOR(self_));
 	CMK_WIDGET_CLASS(graphene_settings_popup_parent_class)->style_changed(self_);
-}
-
-static gboolean on_scroll(ClutterScrollActor *scroll, ClutterScrollEvent *event, GrapheneSettingsPopup *self)
-{
-	// TODO: Disable button highlight when scrolling, so it feels smoother
-	if(event->direction == CLUTTER_SCROLL_SMOOTH)
-	{
-		gdouble dx, dy;
-		clutter_event_get_scroll_delta((ClutterEvent *)event, &dx, &dy);
-		self->scrollAmount += dy*50; // TODO: Not magic number for multiplier
-		if(self->scrollAmount < 0)
-			self->scrollAmount = 0;
-	
-		gfloat min, nat;
-		clutter_layout_manager_get_preferred_height(clutter_actor_get_layout_manager(CLUTTER_ACTOR(scroll)), CLUTTER_CONTAINER(scroll), -1, &min, &nat);
-
-		gfloat height = clutter_actor_get_height(CLUTTER_ACTOR(scroll));
-		gfloat maxScroll = MAX(nat - height, 0);
-
-		if(self->scrollAmount > maxScroll)
-			self->scrollAmount = maxScroll;
-
-		ClutterPoint p = {0, self->scrollAmount};
-		clutter_scroll_actor_scroll_to_point(scroll, &p);
-	}
-	return TRUE;
 }
 
 static void on_logout_button_activate(CmkButton *button, GrapheneSettingsPopup *self)

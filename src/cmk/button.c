@@ -47,7 +47,7 @@ static void on_style_changed(CmkWidget *self_);
 static void on_background_changed(CmkWidget *self_);
 static void on_size_changed(ClutterActor *self, GParamSpec *spec, ClutterCanvas *canvas);
 static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, int height, CmkButton *self);
-static gboolean on_key_released(ClutterActor *self_, ClutterKeyEvent *event);
+static gboolean on_key_pressed(ClutterActor *self_, ClutterKeyEvent *event);
 static void on_key_focus(ClutterActor *self_);
 static void on_key_unfocus(ClutterActor *self_);
 
@@ -85,7 +85,7 @@ static void cmk_button_class_init(CmkButtonClass *class)
 	actorClass->get_preferred_width = cmk_button_get_preferred_width;
 	actorClass->get_preferred_height = cmk_button_get_preferred_height;
 	actorClass->allocate = cmk_button_allocate;
-	actorClass->key_release_event = on_key_released;
+	actorClass->key_press_event = on_key_pressed;
 	actorClass->key_focus_in = on_key_focus;
 	actorClass->key_focus_out = on_key_unfocus;
 
@@ -475,7 +475,7 @@ const gchar * cmk_button_get_name(CmkButton *self)
 	return cmk_button_get_text(self);
 }
 
-static gboolean on_key_released(ClutterActor *self_, ClutterKeyEvent *event)
+static gboolean on_key_pressed(ClutterActor *self_, ClutterKeyEvent *event)
 {
 	if(event->keyval == CLUTTER_KEY_Return)
 	{
@@ -489,12 +489,13 @@ static gboolean on_key_released(ClutterActor *self_, ClutterKeyEvent *event)
 
 static void on_key_focus(ClutterActor *self_)
 {
-	//CmkButtonPrivate *private = PRIVATE(CMK_BUTTON(self_));
 	clutter_content_invalidate(clutter_actor_get_content(self_));
+	CLUTTER_ACTOR_CLASS(cmk_button_parent_class)->key_focus_in(self_);
 }
 
 static void on_key_unfocus(ClutterActor *self_)
 {
-	//CmkButtonPrivate *private = PRIVATE(CMK_BUTTON(self_));
-	clutter_content_invalidate(clutter_actor_get_content(self_));
+	ClutterContent *content = clutter_actor_get_content(self_);
+	if(content)
+		clutter_content_invalidate(content);
 }

@@ -102,7 +102,7 @@ GraphenePKAuthDialog * graphene_pk_auth_dialog_new(const gchar *actionId, const 
 	clutter_text_set_editable(passwordBox, TRUE);
 	clutter_actor_set_reactive(CLUTTER_ACTOR(passwordBox), TRUE);
 	self->responseField = passwordBox;
-	graphene_dialog_set_content(GRAPHENE_DIALOG(self), passwordBox);
+	graphene_dialog_set_content(GRAPHENE_DIALOG(self), CLUTTER_ACTOR(passwordBox));
 
 	g_signal_connect_swapped(passwordBox, "activate", G_CALLBACK(on_activate), self);
 	g_signal_connect(passwordBox, "notify::mapped", G_CALLBACK(grab_focus_on_map), NULL);

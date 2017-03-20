@@ -55,6 +55,7 @@ add_executable(graphene-desktop
 	cmk/cmk-scroll-box.c
 	# ${PROJECT_SOURCE_DIR}/common/dbusmonitor.c
 	csk/audio.c
+	csk/backlight.c
 	status-icons.c
 	panel.c
 	panel-launcher.c

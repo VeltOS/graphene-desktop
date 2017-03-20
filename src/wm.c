@@ -23,6 +23,7 @@
 #include "cmk/cmk-icon-loader.h"
 #include "cmk/button.h"
 #include "cmk/shadow.h"
+#include "csk/backlight.h"
 #include <meta/meta-shadow-factory.h>
 #include <meta/display.h>
 #include <meta/keybindings.h>
@@ -886,66 +887,28 @@ static void on_key_volume_mute(MetaDisplay *display, MetaScreen *screen, MetaWin
 
 static void on_key_backlight_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
 {
-	//if(!self->connection)
-	//	return;
-	//
-	//g_dbus_connection_call(self->connection,
-	//	"org.gnome.SettingsDaemon.Power",
-	//	"/org/gnome/SettingsDaemon/Power",
-	//	"org.gnome.SettingsDaemon.Power.Screen",
-	//	"StepUp",
-	//	NULL,
-	//	NULL,
-	//	G_DBUS_CALL_FLAGS_NONE,
-	//	-1, NULL, NULL, NULL);
+	float stepSize = 1.0/WM_PERCENT_BAR_STEPS;
+	gfloat val = csk_backlight_set_brightness(1.0/WM_PERCENT_BAR_STEPS, TRUE);
+	if(val < 0)
+		val = 1;
+	graphene_percent_floater_set_percent(self->percentBar, val);
 }
 
 static void on_key_backlight_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
 {
-	//if(!self->connection)
-	//	return;
-	//
-	//g_dbus_connection_call(self->connection,
-	//	"org.gnome.SettingsDaemon.Power",
-	//	"/org/gnome/SettingsDaemon/Power",
-	//	"org.gnome.SettingsDaemon.Power.Screen",
-	//	"StepDown",
-	//	NULL,
-	//	NULL,
-	//	G_DBUS_CALL_FLAGS_NONE,
-	//	-1, NULL, NULL, NULL);
+	float stepSize = 1.0/WM_PERCENT_BAR_STEPS;
+	gfloat val = csk_backlight_set_brightness(-1.0/WM_PERCENT_BAR_STEPS, TRUE);
+	if(val < 0)
+		val = 1;
+	graphene_percent_floater_set_percent(self->percentBar, val);
 }
 
 static void on_key_kb_backlight_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
 {
-	//if(!self->connection)
-	//	return;
-	//
-	//g_dbus_connection_call(self->connection,
-	//	"org.gnome.SettingsDaemon.Power",
-	//	"/org/gnome/SettingsDaemon/Power",
-	//	"org.gnome.SettingsDaemon.Power.Keyboard",
-	//	"StepUp",
-	//	NULL,
-	//	NULL,
-	//	G_DBUS_CALL_FLAGS_NONE,
-	//	-1, NULL, NULL, NULL);
 }
 
 static void on_key_kb_backlight_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
 {
-	//if(!self->connection)
-	//	return;
-	//
-	//g_dbus_connection_call(self->connection,
-	//	"org.gnome.SettingsDaemon.Power",
-	//	"/org/gnome/SettingsDaemon/Power",
-	//	"org.gnome.SettingsDaemon.Power.Keyboard",
-	//	"StepDown",
-	//	NULL,
-	//	NULL,
-	//	G_DBUS_CALL_FLAGS_NONE,
-	//	-1, NULL, NULL, NULL);
 }
 
 static void on_panel_main_menu(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
@@ -982,20 +945,3 @@ static void init_keybindings(GrapheneWM *self)
 	// meta_keybindings_set_custom_handler("switch-windows", switch_windows);
 	// meta_keybindings_set_custom_handler("switch-applications", switch_windows);
 }
-
-
-/*
- * Dialog
- */
-
-void graphene_wm_show_logout_dialog(GrapheneWM *self, GCallback onCloseCb)
-{
-	//gchar **buttons = g_strsplit("Logout Sleep Restart Shutdown Cancel", " ", 0);
-	//GrapheneWMDialog *dialog = graphene_wm_dialog_new(NULL, buttons);
-	//g_strfreev(buttons);
-
-	//g_signal_connect(dialog, "close", onCloseCb, self);
-	//graphene_wm_dialog_show(dialog, meta_plugin_get_screen(META_PLUGIN(self)), 0);
-	//meta_plugin_begin_modal(META_PLUGIN(self), 0, 0);
-}
-	

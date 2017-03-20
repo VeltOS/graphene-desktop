@@ -80,6 +80,7 @@ static void graphene_network_control_class_init(GrapheneNetworkControlClass *kla
 
 static void graphene_network_control_init(GrapheneNetworkControl *self)
 {
+  self->iconName = g_strdup_printf("network-offline-symbolic");
   GError *error = NULL;
   self->wicdDaemonProxy = g_dbus_proxy_new_for_bus_sync(G_BUS_TYPE_SYSTEM, 0, NULL,
     "org.wicd.daemon",

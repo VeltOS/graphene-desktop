@@ -52,6 +52,7 @@ add_executable(graphene-desktop
 	cmk/cmk-icon-loader.c
 	cmk/cmk-icon.c
 	cmk/cmk-label.c
+	cmk/cmk-scroll-box.c
 	# ${PROJECT_SOURCE_DIR}/common/dbusmonitor.c
 	csk/audio.c
 	status-icons.c

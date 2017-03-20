@@ -156,8 +156,6 @@ static void on_style_changed(CmkWidget *self_)
 {
 	GraphenePanel *self = GRAPHENE_PANEL(self_);
 
-	//clutter_box_layout_set_spacing(self->settingsAppletLayout, cmk_widget_style_get_padding(self_)/2);
-
 	float padding = cmk_widget_style_get_padding(self_);
 	ClutterMargin margin = {padding, padding, 0, 0};
 	clutter_actor_set_margin(CLUTTER_ACTOR(self->clock), &margin);
@@ -171,7 +169,10 @@ static void on_style_changed(CmkWidget *self_)
 
 void graphene_panel_show_main_menu(GraphenePanel *self)
 {
-	on_launcher_button_activate(self->launcher, self);
+	if(self->popupSource == self->launcher)
+		on_settings_button_activate(self->settingsApplet, self);
+	else
+		on_launcher_button_activate(self->launcher, self);
 }
 
 ClutterActor * graphene_panel_get_input_actor(GraphenePanel *self)
@@ -190,6 +191,7 @@ static void on_popup_destroy(CmkWidget *popup, GraphenePanel *self)
 		clutter_event_remove_filter(self->popupEventFilterId);
 	self->popupEventFilterId = 0;
 
+	cmk_focus_stack_pop(self->popup);
 	self->popup = NULL;
 	self->popupSource = NULL;
 	if(self->modalCb)
@@ -245,6 +247,7 @@ static void on_launcher_button_activate(CmkButton *button, GraphenePanel *self)
 	self->popup = CMK_WIDGET(graphene_launcher_popup_new());
 	self->popupSource = button;
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->popup));
+	cmk_focus_stack_push(self->popup);
 	g_signal_connect(self->popup, "destroy", G_CALLBACK(on_popup_destroy), self);
 
 	ClutterStage *stage = CLUTTER_STAGE(clutter_actor_get_stage(CLUTTER_ACTOR(self)));
@@ -267,6 +270,7 @@ static void on_settings_button_activate(CmkButton *button, GraphenePanel *self)
 	self->popup = CMK_WIDGET(graphene_settings_popup_new(self->logoutCb, self->cbUserdata));
 	self->popupSource = button;
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->popup));
+	cmk_focus_stack_push(self->popup);
 	g_signal_connect(self->popup, "destroy", G_CALLBACK(on_popup_destroy), self);
 
 	ClutterStage *stage = CLUTTER_STAGE(clutter_actor_get_stage(CLUTTER_ACTOR(self)));

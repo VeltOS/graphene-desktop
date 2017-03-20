@@ -463,7 +463,7 @@ static void do_exit(ExitType exitType, gboolean force);
 
 void graphene_session_request_logout()
 {	
-	GrapheneDialog *dialog = graphene_dialog_new_simple(NULL, NULL, "Cancel", "Logout", "Restart", "Shutdown", NULL);
+	GrapheneDialog *dialog = graphene_dialog_new_simple(NULL, NULL, "Cancel", "Suspend", "Logout", "Restart", "Shutdown", NULL);
 	g_signal_connect(dialog, "select", G_CALLBACK(on_logout_dialog_close), NULL);
 	session->dialogCb(CLUTTER_ACTOR(dialog), session->cbUserdata);
 }
@@ -471,7 +471,9 @@ void graphene_session_request_logout()
 static void on_logout_dialog_close(GrapheneDialog *dialog, const gchar *button)
 {
 	session->dialogCb(NULL, session->cbUserdata);
-	if(g_strcmp0(button, "Shutdown") == 0)
+	if(g_strcmp0(button, "Suspend") == 0)
+		system("systemctl suspend");
+	else if(g_strcmp0(button, "Shutdown") == 0)
 		do_exit(EXIT_SHUTDOWN, FALSE);
 	else if(g_strcmp0(button, "Restart") == 0)
 		do_exit(EXIT_REBOOT, FALSE);

@@ -9,7 +9,7 @@
 
 #include <glib.h>
 #include <glib-object.h>
-#include "cmk/cmk-icon.h"
+#include <libcmk/cmk-icon.h>
 
 G_BEGIN_DECLS
 

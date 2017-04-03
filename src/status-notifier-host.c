@@ -15,8 +15,8 @@
 
 #include "status-notifier-host.h"
 #include "status-notifier-dbus-ifaces.h"
-#include "cmk/button.h"
-#include "cmk/cmk-icon.h"
+#include <libcmk/button.h>
+#include <libcmk/cmk-icon.h>
 
 #define STATUSNOTIFIER_WATCHER_DBUS_NAME "org.freedesktop.StatusNotifierWatcher"
 #define STATUSNOTIFIER_WATCHER_DBUS_PATH "/StatusNotifierWatcher"

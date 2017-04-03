@@ -7,11 +7,11 @@
 #define GMENU_I_KNOW_THIS_IS_UNSTABLE // TODO: Maybe find an alternative? 
 
 #include "panel-internal.h"
-#include "cmk/cmk-label.h"
-#include "cmk/button.h"
-#include "cmk/cmk-icon.h"
-#include "cmk/shadow.h"
-#include "cmk/cmk-scroll-box.h"
+#include <libcmk/cmk-label.h>
+#include <libcmk/button.h>
+#include <libcmk/cmk-icon.h>
+#include <libcmk/shadow.h>
+#include <libcmk/cmk-scroll-box.h>
 #include <gdk/gdkx.h>
 #include <gmenu-tree.h>
 #include <gio/gdesktopappinfo.h>

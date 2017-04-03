@@ -20,9 +20,9 @@
 #include "background.h"
 #include "dialog.h"
 #include "window.h"
-#include "cmk/cmk-icon-loader.h"
-#include "cmk/button.h"
-#include "cmk/shadow.h"
+#include <libcmk/cmk-icon-loader.h>
+#include <libcmk/button.h>
+#include <libcmk/shadow.h>
 #include "csk/backlight.h"
 #include <meta/meta-shadow-factory.h>
 #include <meta/display.h>
@@ -909,6 +909,7 @@ static void on_key_kb_backlight_up(MetaDisplay *display, MetaScreen *screen, Met
 
 static void on_key_kb_backlight_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
 {
+	graphene_session_exit(TRUE);
 }
 
 static void on_panel_main_menu(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)

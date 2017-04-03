@@ -11,8 +11,8 @@
 #define __GRAPHENE_DIALOG_H__
 
 #include <clutter/clutter.h>
-#include "cmk/cmk-widget.h"
-#include "cmk/button.h"
+#include <libcmk/cmk-widget.h>
+#include <libcmk/button.h>
 
 G_BEGIN_DECLS
 

@@ -7,7 +7,7 @@
 #ifndef __GRAPHENE_STATUS_ICONS_H__
 #define __GRAPHENE_STATUS_ICONS_H__
 
-#include "cmk/cmk-icon.h"
+#include <libcmk/cmk-icon.h>
 
 G_BEGIN_DECLS
 

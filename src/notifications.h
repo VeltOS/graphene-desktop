@@ -7,7 +7,7 @@
 #ifndef __GRAPHENE_NOTIFICATION_BOX_H__
 #define __GRAPHENE_NOTIFICATION_BOX_H__
 
-#include "cmk/cmk-widget.h"
+#include <libcmk/cmk-widget.h>
 
 G_BEGIN_DECLS
 

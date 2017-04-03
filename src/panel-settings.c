@@ -5,11 +5,11 @@
  */
 
 #include "panel-internal.h"
-#include "cmk/cmk-label.h"
-#include "cmk/button.h"
-#include "cmk/cmk-icon.h"
-#include "cmk/shadow.h"
-#include "cmk/cmk-scroll-box.h"
+#include <libcmk/cmk-label.h>
+#include <libcmk/button.h>
+#include <libcmk/cmk-icon.h>
+#include <libcmk/shadow.h>
+#include <libcmk/cmk-scroll-box.h>
 #include <act/act.h>
 
 #define PANEL_WIDTH 300

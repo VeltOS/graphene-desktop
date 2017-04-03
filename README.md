@@ -22,17 +22,18 @@ Building Manually
 
 graphene-desktop uses the following libraries and packages:
 
-    - cmake *(build only)*
+    - cmake (build only)
     - accountsservice
-    - gnome-control-center *(optional)*
+    - gnome-control-center (optional)
     - gnome-menus
     - libpulse
-	- librsvg
+    - libcmk (https://github.com/VeltTechnologies/cmk)
+    - librsvg
     - mutter >= 3.22
-    - nautilus *(optional)*
-    - paper-gtk-theme-git >= 297 *(optional)*
-    - paper-icon-theme-git >= 552 *(optional)*
-	- wicd
+    - nautilus (optional)
+    - paper-gtk-theme-git >= 297 (optional)
+    - paper-icon-theme-git >= 552 (optional)
+    - wicd
 
 All of these are available from Arch's official repositories, the AUR,
 or the vos repository. For any other Linux distros, you're on your own.

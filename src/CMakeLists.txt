@@ -24,7 +24,7 @@ add_custom_command(
 )
 
 pkg_check_modules(GIOUNIX2 REQUIRED gio-unix-2.0>=2.10)
-pkg_check_modules(LIBMUTTER REQUIRED libmutter>=3.22)
+pkg_check_modules(LIBMUTTER REQUIRED libmutter-0>=3.22)
 pkg_check_modules(LIBPULSEGLIB REQUIRED libpulse-mainloop-glib>=8.0)
 pkg_check_modules(POLKITAGENT REQUIRED polkit-agent-1)
 pkg_check_modules(LIBGNOMEMENU REQUIRED libgnome-menu-3.0>=3.13)

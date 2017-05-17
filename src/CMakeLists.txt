@@ -24,7 +24,7 @@ add_custom_command(
 )
 
 pkg_check_modules(GIOUNIX2 REQUIRED gio-unix-2.0>=2.10)
-pkg_check_modules(LIBMUTTER REQUIRED libmutter>=3.22)
+pkg_check_modules(LIBMUTTER REQUIRED libmutter>=3.24)
 pkg_check_modules(LIBPULSEGLIB REQUIRED libpulse-mainloop-glib>=8.0)
 pkg_check_modules(POLKITAGENT REQUIRED polkit-agent-1)
 pkg_check_modules(LIBGNOMEMENU REQUIRED libgnome-menu-3.0>=3.13)
@@ -47,11 +47,12 @@ add_executable(graphene-desktop
 	pkauthdialog.c
 	csk/audio.c
 	csk/backlight.c
-	csk/network.c
 	status-icons.c
 	panel.c
 	panel-launcher.c
 	panel-settings.c
+	settings-panels/settings-panel.c
+	settings-panels/network-panel.c
 	panel-clock.c
 	settings-battery.c
 	network.c
@@ -65,7 +66,7 @@ target_link_libraries(graphene-desktop
 	${POLKITAGENT_LIBRARIES}
 	${LIBGNOMEMENU_LIBRARIES}
 	${LIBACT_LIBRARIES}
-	cmk
+	/home/aidan/cmk/build/libcmk.so
 	m
 )
 target_include_directories(graphene-desktop PRIVATE
@@ -77,7 +78,6 @@ target_include_directories(graphene-desktop PRIVATE
 	${LIBGNOMEMENU_INCLUDE_DIRS}
 	${LIBACT_INCLUDE_DIRS}
 	/usr/include/libcmk
-	/usr/local/include/libcmk
 )
 
 # Normally, the CMake install functionality removes the executable's rpath,

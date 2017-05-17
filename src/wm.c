@@ -20,9 +20,8 @@
 #include "background.h"
 #include "dialog.h"
 #include "window.h"
+#include <libcmk/cmk.h>
 #include <libcmk/cmk-icon-loader.h>
-#include <libcmk/button.h>
-#include <libcmk/shadow.h>
 #include "csk/backlight.h"
 #include <meta/meta-shadow-factory.h>
 #include <meta/display.h>

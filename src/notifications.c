@@ -5,8 +5,7 @@
  */
 
 #include "notifications.h"
-#include <libcmk/shadow.h>
-#include <libcmk/cmk-icon.h>
+#include <libcmk/cmk.h>
 #include <notifications-dbus-iface.h>
 #include <config.h>
 

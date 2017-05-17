@@ -6,9 +6,7 @@
  
 #include "panel.h"
 #include "panel-internal.h"
-#include <libcmk/shadow.h>
-#include <libcmk/button.h>
-#include <libcmk/cmk-icon.h>
+#include <libcmk/cmk.h>
 #include "settings-battery.h"
 #include "network.h"
 #include "status-icons.h"

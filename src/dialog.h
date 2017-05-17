@@ -10,9 +10,7 @@
 #ifndef __GRAPHENE_DIALOG_H__
 #define __GRAPHENE_DIALOG_H__
 
-#include <clutter/clutter.h>
-#include <libcmk/cmk-widget.h>
-#include <libcmk/button.h>
+#include <libcmk/cmk.h>
 
 G_BEGIN_DECLS
 

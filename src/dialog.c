@@ -5,8 +5,7 @@
  */
  
 #include "dialog.h"
-#include <libcmk/shadow.h>
-#include <libcmk/cmk-icon.h>
+#include <libcmk/cmk.h>
 #include <glib.h>
 #include <math.h>
 

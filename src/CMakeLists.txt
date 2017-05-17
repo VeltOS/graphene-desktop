@@ -51,6 +51,8 @@ add_executable(graphene-desktop
 	panel.c
 	panel-launcher.c
 	panel-settings.c
+	settings-panels/settings-panel.c
+	settings-panels/network-panel.c
 	panel-clock.c
 	settings-battery.c
 	network.c
@@ -64,7 +66,7 @@ target_link_libraries(graphene-desktop
 	${POLKITAGENT_LIBRARIES}
 	${LIBGNOMEMENU_LIBRARIES}
 	${LIBACT_LIBRARIES}
-	cmk
+	/home/aidan/cmk/build/libcmk.so
 	m
 )
 target_include_directories(graphene-desktop PRIVATE
@@ -76,7 +78,6 @@ target_include_directories(graphene-desktop PRIVATE
 	${LIBGNOMEMENU_INCLUDE_DIRS}
 	${LIBACT_INCLUDE_DIRS}
 	/usr/include/libcmk
-	/usr/local/include/libcmk
 )
 
 # Normally, the CMake install functionality removes the executable's rpath,

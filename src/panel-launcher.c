@@ -79,6 +79,7 @@ static void graphene_launcher_popup_init(GrapheneLauncherPopup *self)
 	self->searchBox = CLUTTER_TEXT(clutter_text_new());
 	clutter_text_set_editable(self->searchBox, TRUE);
 	clutter_text_set_activatable(self->searchBox, TRUE);
+	clutter_text_set_single_line_mode(self->searchBox, TRUE);
 	clutter_actor_set_reactive(CLUTTER_ACTOR(self->searchBox), TRUE);
 	g_signal_connect_swapped(self->searchBox, "text-changed", G_CALLBACK(on_search_box_text_changed), self);
 	g_signal_connect_swapped(self->searchBox, "activate", G_CALLBACK(on_search_box_activate), self);
@@ -257,13 +258,13 @@ static gboolean add_app(GrapheneLauncherPopup *self, GDesktopAppInfo *appInfo)
 	if(!self->firstApp)
 		self->firstApp = button;
 	
-	clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), separator_new());
 	return TRUE;
 }
 
 static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenuTreeDirectory *directory)
 {
 	guint count = 0;
+	gboolean firstItem = TRUE;
 	GMenuTreeIter *it = gmenu_tree_directory_iter(directory);
 	
 	while(TRUE)
@@ -276,13 +277,17 @@ static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenu
 		{
 			GMenuTreeEntry *entry = gmenu_tree_iter_get_entry(it);
 			if(add_app(self, gmenu_tree_entry_get_app_info(entry)))
-				count += 1;
+				count += 1, firstItem = FALSE;
 			gmenu_tree_item_unref(entry);
 		}
 		else if(type == GMENU_TREE_ITEM_DIRECTORY)
 		{
 			GMenuTreeDirectory *directory = gmenu_tree_iter_get_directory(it);
 	
+			ClutterActor *sep = NULL;
+			if(!firstItem)
+				clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), (sep = separator_new()));
+			
 			CmkLabel *label = cmk_label_new_with_text(gmenu_tree_directory_get_name(directory));
 			cmk_widget_set_style_parent(CMK_WIDGET(label), self->window);
 			clutter_actor_set_x_expand(CLUTTER_ACTOR(label), TRUE);
@@ -291,16 +296,18 @@ static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenu
 			clutter_actor_set_margin(CLUTTER_ACTOR(label), &margin);
 			clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), CLUTTER_ACTOR(label));
 
-			ClutterActor *sep = separator_new();
-			clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), sep);
-			
 			guint subcount = popup_applist_populate_directory(self, directory);
 			gmenu_tree_item_unref(directory);
 
 			if(subcount == 0)
 			{
 				clutter_actor_destroy(CLUTTER_ACTOR(label));
-				clutter_actor_destroy(sep);
+				if(sep)
+					clutter_actor_destroy(sep);
+			}
+			else
+			{
+				firstItem = FALSE;
 			}
 		}
 	}

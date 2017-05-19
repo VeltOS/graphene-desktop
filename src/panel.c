@@ -134,12 +134,15 @@ static void graphene_panel_dispose(GObject *self_)
 static void graphene_panel_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags)
 {
 	GraphenePanel *self = GRAPHENE_PANEL(self_);
+
+	gfloat width = box->x2 - box->x1;
+	gfloat height = box->y2 - box->y1;
 	
 	gfloat panelHeight = PANEL_HEIGHT * cmk_widget_style_get_scale_factor(CMK_WIDGET(self_));
 	gfloat shadowSize = cmk_widget_style_get_padding(CMK_WIDGET(self_));
-	ClutterActorBox barBox = {box->x1, box->y2-panelHeight, box->x2, box->y2};
-	ClutterActorBox sdcBox = {box->x1, barBox.y1-shadowSize, box->x2, barBox.y1+(shadowSize*2)};
-	ClutterActorBox popupBox = {box->x1, box->y1, box->x2, box->y2 - panelHeight};
+	ClutterActorBox barBox = {0, height-panelHeight, width, height};
+	ClutterActorBox sdcBox = {0, barBox.y1-shadowSize, width, barBox.y1+(shadowSize*2)};
+	ClutterActorBox popupBox = {0, 0, width, barBox.y1};
 
 	clutter_actor_allocate(CLUTTER_ACTOR(self->sdc), &barBox, flags);
 	clutter_actor_allocate(CLUTTER_ACTOR(self->bar), &barBox, flags);

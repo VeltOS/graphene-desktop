@@ -170,7 +170,6 @@ void graphene_wm_start(MetaPlugin *self_)
 	clutter_actor_insert_child_above(self->stage, ACTOR(self->panel), NULL);
 	g_signal_connect_swapped(panelBar, "allocation-changed", G_CALLBACK(update_struts), self);
 	g_signal_connect_swapped(screen, "workspace-switched", G_CALLBACK(update_struts), self);
-	update_struts(self);
 
 	// Cover group goes over everything to "dim" the screen for dialogs
 	self->coverGroup = clutter_actor_new();
@@ -186,6 +185,7 @@ void graphene_wm_start(MetaPlugin *self_)
 	// Update actors when the monitors change/resize
 	g_signal_connect(screen, "monitors_changed", G_CALLBACK(on_monitors_changed), self);
 	on_monitors_changed(screen, self);
+	update_struts(self);
 	
 	// Show everything
 	clutter_actor_show(self->stage);

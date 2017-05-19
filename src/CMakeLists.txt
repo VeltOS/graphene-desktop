@@ -47,6 +47,7 @@ add_executable(graphene-desktop
 	pkauthdialog.c
 	csk/audio.c
 	csk/backlight.c
+	csk/network.c
 	status-icons.c
 	panel.c
 	panel-launcher.c

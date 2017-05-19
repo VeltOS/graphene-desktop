@@ -25,14 +25,15 @@ G_DECLARE_FINAL_TYPE(CskNetworkAccessPoint, csk_network_access_point, CSK, NETWO
 
 typedef enum
 {
+	CSK_NDEVICE_TYPE_UNKNOWN,
 	CSK_NDEVICE_TYPE_WIRED,
 	CSK_NDEVICE_TYPE_WIFI,
-	CSK_NETWORK_TYPE_BLUETOOTH,
+	CSK_NDEVICE_TYPE_BLUETOOTH,
 } CskNDeviceType;
 
 typedef enum
 {
-	CSK_NETWORK_DISCONENCTED,
+	CSK_NETWORK_DISCONNECTED,
 	CSK_NETWORK_CONNECTING,
 	CSK_NETWORK_CONNECTED,
 } CskNConnectionStatus;
@@ -59,16 +60,16 @@ CskNetworkManager * csk_network_manager_get_default(void);
 /*
  * Get a list of every available CskNetworkDevice. Listen to the
  * "device-added" and "device-removed" signals to check for device
- * changes. If a device is removed, it will emit the "removed" signal
- * and will become inert forever.
+ * changes. When a device is removed, it will become inert forever,
+ * only useful for pointer comparisons.
  */
-const GList * csk_network_manager_get_devices(CskNetworkManager *ns);
+const GList * csk_network_manager_get_devices(CskNetworkManager *nm);
 
 /*
  * The name of an icon to represent the overall connection status.
  * Listen to the "notify::icon" signal for changes to this.
  */
-const gchar * csk_network_manager_get_icon(CskNetworkManager *ns);
+const gchar * csk_network_manager_get_icon(CskNetworkManager *nm);
 
 /*
  * Gets the type of device.
@@ -119,16 +120,21 @@ void csk_network_device_scan(CskNetworkDevice *device);
  * the same physical network (ex. in the case of two Wi-Fi devices).
  *
  * Listen to the "ap-added" and "ap-removed" signals to tell when
- * access points change. If an access point is removed, it will emit
- * the "removed" signal and will become inert forever.
+ * access points change. When an access point is removed, it will become
+ * inert forever, only useful for pointer comparisons.
  */
 const GList * csk_network_device_get_access_points(CskNetworkDevice *device);
 
 /*
  * Gets the device that this access point has been found through, or
- * NULL if the device has been removed.
+ * NULL if the device or this AP has been removed.
  */
 CskNetworkDevice * csk_network_access_point_get_device(CskNetworkAccessPoint *ap);
+
+/*
+ * The access point's connection status.
+ */
+CskNConnectionStatus * csk_network_access_point_get_connection_status(CskNetworkAccessPoint *ap);
 
 /*
  * Gets a name for this access point. For Wi-Fi networks, it is the ssid.
@@ -136,8 +142,22 @@ CskNetworkDevice * csk_network_access_point_get_device(CskNetworkAccessPoint *ap
 const gchar * csk_network_access_point_get_name(CskNetworkAccessPoint *ap);
 
 /*
+ * Gets the MAC address of the remote access point if connected, or NULL if
+ * this access point is not connected or if the remote MAC is unavailable.
+ *
+ * On Wi-Fi networks, this may change as the network daemon hops physical
+ * access points to find the best connection.
+ */
+const gchar * csk_network_access_point_get_mac(CskNetworkAccessPoint *ap);
+
+/*
  * Gets the signal strength [0, 1] of the access point. If this concept
  * doesn't apply to the type of access point (eg Wired), it will be 1.
+ *
+ * For Wi-Fi, a single CskNetworkAccessPoint object represents all physical
+ * wirelss access points available, and therefore this method will return
+ * the best signal available from all access points with the same ssid (and
+ * configurations).
  */
 gfloat csk_network_access_point_get_strength(CskNetworkAccessPoint *ap);
 
@@ -149,9 +169,9 @@ gfloat csk_network_access_point_get_strength(CskNetworkAccessPoint *ap);
 CskNSecurityType csk_network_access_point_get_security(CskNetworkAccessPoint *ap);
 
 /*
- * The access point's connection status.
+ * Gets an icon to represent the status of this AP.
  */
-CskNConnectionStatus * csk_network_device_get_connection_status(CskNetworkDevice *device);
+const gchar * csk_network_access_point_get_icon(CskNetworkAccessPoint *ap);
 
 /*
  * Tries to connect to this AP. This may disconnect other access

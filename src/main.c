@@ -40,6 +40,8 @@ static void on_session_quit(gboolean failed, gpointer userdata);
 
 int main(int argc, char **argv)
 {
+	g_message("Graphene Version %s%s", GRAPHENE_VERSION_STR, GRAPHENE_DEBUG ? "d" : "");
+	
 	meta_plugin_manager_set_plugin_type(GRAPHENE_TYPE_WM);
 	meta_set_wm_name("GRAPHENE Desktop");
 	meta_set_gnome_wm_keybindings("Mutter,GNOME Shell");
@@ -58,8 +60,6 @@ int main(int argc, char **argv)
 	meta_init();
 	g_unsetenv("NO_AT_BRIDGE");
 	g_unsetenv("NO_GAIL");
-	
-	g_message("Graphene Version %s%s", GRAPHENE_VERSION_STR, GRAPHENE_DEBUG ? "d" : "");
 	
 	return meta_run();
 }

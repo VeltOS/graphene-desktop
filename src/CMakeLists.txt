@@ -51,8 +51,6 @@ add_executable(graphene-desktop
 	panel.c
 	panel-launcher.c
 	panel-settings.c
-	settings-panels/settings-panel.c
-	settings-panels/network-panel.c
 	panel-clock.c
 	settings-battery.c
 	network.c

@@ -79,6 +79,7 @@ static void graphene_launcher_popup_init(GrapheneLauncherPopup *self)
 	self->searchBox = CLUTTER_TEXT(clutter_text_new());
 	clutter_text_set_editable(self->searchBox, TRUE);
 	clutter_text_set_activatable(self->searchBox, TRUE);
+	clutter_text_set_single_line_mode(self->searchBox, TRUE);
 	clutter_actor_set_reactive(CLUTTER_ACTOR(self->searchBox), TRUE);
 	g_signal_connect_swapped(self->searchBox, "text-changed", G_CALLBACK(on_search_box_text_changed), self);
 	g_signal_connect_swapped(self->searchBox, "activate", G_CALLBACK(on_search_box_activate), self);

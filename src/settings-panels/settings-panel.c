@@ -85,8 +85,6 @@ static void on_settings_widget_clicked(GrapheneSettingsPanel *self, CmkButton *b
 
 static void add_setting_widget_n(GrapheneSettingsPanel *self, const gchar *title, const gchar *iconName, GType panel, gboolean toggleable)
 {	
-	clutter_actor_add_child(CLUTTER_ACTOR(self), separator_new());
-
 	CmkButton *button = cmk_button_new();
 	CmkIcon *icon = cmk_icon_new_from_name(iconName, 24);
 	cmk_button_set_content(button, CMK_WIDGET(icon));
@@ -113,16 +111,19 @@ static void add_setting_widget(GrapheneSettingsPanel *self, const gchar *title, 
 	g_signal_connect_swapped(button, "activate", G_CALLBACK(on_settings_widget_clicked), self);
 }
 
-CmkLabel * add_settings_category_label(CmkWidget *self, const gchar *title)
+CmkLabel * graphene_category_label_new(const gchar *title)
 {
-	CmkLabel *label = cmk_label_new_with_text(title);
-	cmk_widget_set_style_parent(CMK_WIDGET(label), CMK_WIDGET(self));
+	CmkLabel *label = cmk_label_new_full(title, 1, TRUE);
+	cmk_widget_set_margin_multipliers(CMK_WIDGET(label), 2.5, 2, 1, 1);
 	clutter_actor_set_x_expand(CLUTTER_ACTOR(label), TRUE);
 	clutter_actor_set_x_align(CLUTTER_ACTOR(label), CLUTTER_ACTOR_ALIGN_START);
-	ClutterMargin margin = {50, 40, 20, 20};
-	clutter_actor_set_margin(CLUTTER_ACTOR(label), &margin);
-	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(label));
 	return label;
+}
+
+static void add_settings_category_label(CmkWidget *self, const gchar *title)
+{
+	CmkLabel *label = graphene_category_label_new(title);
+	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(label));
 }
 
 static void enum_settings_widgets(GrapheneSettingsPanel *self)

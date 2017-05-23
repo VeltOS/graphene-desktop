@@ -11,6 +11,7 @@
 #include <gdk/gdkx.h>
 #include <gmenu-tree.h>
 #include <gio/gdesktopappinfo.h>
+#include "settings-panels/settings-panels.h"
 
 #define LAUNCHER_WIDTH 300
 
@@ -42,7 +43,6 @@ static void on_style_changed(CmkWidget *self_);
 static void on_background_changed(CmkWidget *self_);
 static void on_search_box_text_changed(GrapheneLauncherPopup *self, ClutterText *searchBox);
 static void on_search_box_activate(GrapheneLauncherPopup *self, ClutterText *searchBox);
-static ClutterActor * separator_new();
 static void popup_applist_refresh(GrapheneLauncherPopup *self);
 static void popup_applist_populate(GrapheneLauncherPopup *self);
 static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenuTreeDirectory *directory);
@@ -212,16 +212,6 @@ static void popup_applist_populate(GrapheneLauncherPopup *self)
 	gmenu_tree_item_unref(directory);
 }
 
-static ClutterActor * separator_new()
-{
-	ClutterActor *sep = clutter_actor_new();
-	ClutterColor c = {0,0,0,25};
-	clutter_actor_set_background_color(sep, &c);
-	clutter_actor_set_x_expand(sep, TRUE);
-	clutter_actor_set_height(sep, 2);
-	return sep;
-}
-
 static gboolean add_app(GrapheneLauncherPopup *self, GDesktopAppInfo *appInfo)
 {	
 	if(g_desktop_app_info_get_nodisplay(appInfo))
@@ -288,12 +278,7 @@ static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenu
 			if(!firstItem)
 				clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), (sep = separator_new()));
 			
-			CmkLabel *label = cmk_label_new_with_text(gmenu_tree_directory_get_name(directory));
-			cmk_widget_set_style_parent(CMK_WIDGET(label), self->window);
-			clutter_actor_set_x_expand(CLUTTER_ACTOR(label), TRUE);
-			clutter_actor_set_x_align(CLUTTER_ACTOR(label), CLUTTER_ACTOR_ALIGN_START);
-			ClutterMargin margin = {50, 40, 20, 20};
-			clutter_actor_set_margin(CLUTTER_ACTOR(label), &margin);
+			CmkLabel *label = graphene_category_label_new(gmenu_tree_directory_get_name(directory));
 			clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), CLUTTER_ACTOR(label));
 
 			guint subcount = popup_applist_populate_directory(self, directory);

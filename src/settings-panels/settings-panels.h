@@ -22,7 +22,7 @@ GrapheneNetworkPanel * graphene_network_panel_new(void);
 
 // These are used in other places too
 ClutterActor * separator_new();
-CmkLabel * add_settings_category_label(CmkWidget *self, const gchar *title);
+CmkLabel * graphene_category_label_new(const gchar *title);
 ClutterLayoutManager * clutter_vertical_box_new();
 
 G_END_DECLS

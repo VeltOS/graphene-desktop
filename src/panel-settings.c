@@ -114,6 +114,9 @@ static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
 static void graphene_settings_popup_dispose(GObject *self_)
 {
 	GrapheneSettingsPopup *self = GRAPHENE_SETTINGS_POPUP(self_);
+	if(self->userManager && self->notifyIsLoadedId)
+		g_signal_handler_disconnect(self->userManager, self->notifyIsLoadedId);
+	self->notifyIsLoadedId = 0;
 	G_OBJECT_CLASS(graphene_settings_popup_parent_class)->dispose(self_);
 }
 
@@ -213,7 +216,7 @@ static void on_panel_replace(GrapheneSettingsPopup *self, CmkWidget *replacement
 	g_signal_connect_swapped(replacement, "back", G_CALLBACK(on_panel_back), self);
 	cmk_widget_set_style_parent(replacement, self->window);
 	clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), CLUTTER_ACTOR(replacement));
-	// cmk_widget_fade_in(CMK_WIDGET(replacement));
+	cmk_widget_fade_in(CMK_WIDGET(replacement));
 	gchar *markup = g_strdup_printf("<span font='16'><b>%s</b></span>", clutter_actor_get_name(CLUTTER_ACTOR(replacement)));
 	cmk_label_set_markup(self->usernameLabel, markup);
 	g_free(markup);

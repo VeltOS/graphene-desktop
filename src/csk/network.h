@@ -110,12 +110,11 @@ void csk_network_device_scan(CskNetworkDevice *device);
 
 /*
  * Gets all the access points available to this device. 
- * 
- * While normally "access point" refers to a physical Wi-Fi AP, in this
- * context it means any network this device can connect to. For a Wi-Fi
- * device, it is a list of Wi-Fi networks. For a Wired device, the list
- * will have one AP if a wire is connected; otherwise zero APs.
  *
+ * Access points are used for all types of devices, not just Wi-Fi.
+ * For Wired devices, only one access point object will exist, and
+ * only if the ethernet wire is actually connected.
+ * 
  * Devices do not share Access Point objects, even if they refer to
  * the same physical network (ex. in the case of two Wi-Fi devices).
  *
@@ -124,6 +123,8 @@ void csk_network_device_scan(CskNetworkDevice *device);
  * inert forever, only useful for pointer comparisons.
  */
 const GList * csk_network_device_get_access_points(CskNetworkDevice *device);
+
+
 
 /*
  * Gets the device that this access point has been found through, or
@@ -134,7 +135,7 @@ CskNetworkDevice * csk_network_access_point_get_device(CskNetworkAccessPoint *ap
 /*
  * The access point's connection status.
  */
-CskNConnectionStatus * csk_network_access_point_get_connection_status(CskNetworkAccessPoint *ap);
+CskNConnectionStatus csk_network_access_point_get_connection_status(CskNetworkAccessPoint *ap);
 
 /*
  * Gets a name for this access point. For Wi-Fi networks, it is the ssid.
@@ -144,22 +145,23 @@ const gchar * csk_network_access_point_get_name(CskNetworkAccessPoint *ap);
 /*
  * Gets the MAC address of the remote access point if connected, or NULL if
  * this access point is not connected or if the remote MAC is unavailable.
- *
- * On Wi-Fi networks, this may change as the network daemon hops physical
- * access points to find the best connection.
  */
 const gchar * csk_network_access_point_get_mac(CskNetworkAccessPoint *ap);
 
 /*
  * Gets the signal strength [0, 1] of the access point. If this concept
  * doesn't apply to the type of access point (eg Wired), it will be 1.
- *
- * For Wi-Fi, a single CskNetworkAccessPoint object represents all physical
- * wirelss access points available, and therefore this method will return
- * the best signal available from all access points with the same ssid (and
- * configurations).
  */
-gfloat csk_network_access_point_get_strength(CskNetworkAccessPoint *ap);
+guint csk_network_access_point_get_strength(CskNetworkAccessPoint *ap);
+
+/*
+ * Returns TRUE if this access point is the best out of other access
+ * points of the same device with the same name (SSID) and security type.
+ * FALSE otherwise. Connect to the "notify::best" signal.
+ * This property can be used to determine which APs to show in a GUI
+ * list, to avoid showing lots of networks that are all really the "same."
+ */
+gboolean csk_network_access_point_is_best(CskNetworkAccessPoint *ap);
 
 /*
  * Gets the security type in use by this AP (Wi-Fi only).

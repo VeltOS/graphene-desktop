@@ -61,6 +61,7 @@ add_executable(graphene-desktop
 	notifications.c
 )
 target_link_libraries(graphene-desktop
+	SegFault
 	${GIOUNIX2_LIBRARIES}
 	${LIBMUTTER_LIBRARIES}
 	${LIBPULSEGLIB_LIBRARIES}

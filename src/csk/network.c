@@ -352,6 +352,12 @@ static void on_nm_get_all_devices(GDBusConnection *connection, GAsyncResult *res
 
 static void add_nm_device(CskNetworkManager *self, const gchar *devicePath)
 {
+	// Sometimes on_nm_get_all_devices can duplicate a DeviceAdded signal,
+	// or vice versa, or check for duplicates.
+	for(GList *it=self->devices; it!=NULL; it=it->next)
+		if(g_strcmp0(devicePath, CSK_NETWORK_DEVICE(it->data)->nmDevicePath) == 0)
+			return;
+	
 	g_message("Add device: %s", devicePath);
 	CskNetworkDevice *device = CSK_NETWORK_DEVICE(g_object_new(CSK_TYPE_NETWORK_DEVICE, NULL));
 	device->manager = self;
@@ -1469,6 +1475,7 @@ CskNSecurityType csk_network_access_point_get_security(CskNetworkAccessPoint *se
 
 const gchar * csk_network_access_point_get_icon(CskNetworkAccessPoint *self)
 {
+	// TODO: Icons for non-Wi-Fi APs
 	return self->icon;
 }
 

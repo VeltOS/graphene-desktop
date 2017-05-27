@@ -123,6 +123,8 @@ void graphene_wm_start(MetaPlugin *self_)
 	g_object_set(clutter_settings_get_default(), "font-dpi", (gint)(requestedDPI * requestedDPIScale), NULL);
 	g_signal_connect_after(clutter_get_default_backend(), "resolution-changed", G_CALLBACK(reset_clutter_dpi), NULL);
 	g_signal_connect(iconLoader, "notify::scale", G_CALLBACK(on_global_scale_changed), NULL);
+	
+	cmk_set_grab_handler((CmkGrabHandler)on_panel_request_modal, self_);
 
 	//g_timeout_add(50, sizewarp, NULL);	
 

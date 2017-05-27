@@ -307,7 +307,8 @@ static void graphene_dialog_allocate(ClutterActor *self_, const ClutterActorBox 
 
 	// Place message
 	gfloat messageHeightNat = 0;
-	clutter_actor_get_preferred_height(CLUTTER_ACTOR(private->message), (bodyBox.x2-bodyBox.x1-padding-padding), &messageHeightNat, &min);
+	if(private->message)
+		clutter_actor_get_preferred_height(CLUTTER_ACTOR(private->message), (bodyBox.x2-bodyBox.x1-padding-padding), &messageHeightNat, &min);
 	ClutterActorBox messageBox = {bodyBox.x1+padding,
 		bodyBox.y1+padding,
 		bodyBox.x2-padding,
@@ -315,7 +316,8 @@ static void graphene_dialog_allocate(ClutterActor *self_, const ClutterActorBox 
 	};
 	if(!_clutter_actor_box_valid(&messageBox))
 		goto allocate_exit;
-	clutter_actor_allocate(CLUTTER_ACTOR(private->message), &messageBox, flags);
+	if(private->message)
+		clutter_actor_allocate(CLUTTER_ACTOR(private->message), &messageBox, flags);
 	
 	bodyBox.y1 = messageBox.y2;
 	
@@ -326,7 +328,8 @@ static void graphene_dialog_allocate(ClutterActor *self_, const ClutterActorBox 
 	};
 	if(!_clutter_actor_box_valid(&contentBox))
 		goto allocate_exit;
-	clutter_actor_allocate(CLUTTER_ACTOR(private->content), &contentBox, flags);
+	if(private->content)
+		clutter_actor_allocate(CLUTTER_ACTOR(private->content), &contentBox, flags);
 
 allocate_exit:
 	CLUTTER_ACTOR_CLASS(graphene_dialog_parent_class)->allocate(self_, box, flags);
@@ -411,8 +414,7 @@ void graphene_dialog_set_message(GrapheneDialog *self, const gchar *message)
 
 	if(!message)
 	{
-		clutter_actor_destroy(CLUTTER_ACTOR(private->message));
-		private->message = NULL;
+		g_clear_pointer(&private->message, clutter_actor_destroy);
 		return;
 	}
 	

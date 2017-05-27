@@ -58,6 +58,12 @@ static const float GraphenePadding = 10.0;
  * the signal connects after all the internal signals, and g_object_unref
  * would just throw an error message.
  * Submitted as bug 776471 on GNOME BugZilla.
+ *
+ * Update: Replacing a transition before it finishes causes Clutter to
+ * remove the transition correctly, meaning that it causes a secondary
+ * g_object_unref. I think. Either way, quickly minimizing and unminimizing
+ * windows causes a bunch of g_object_unref on not-objects warnings, but
+ * isn't really a problem.
  */
 #define TRANSITION_MEMLEAK_FIX(actor, tname) g_signal_connect_after(clutter_actor_get_transition((actor), (tname)), "stopped", G_CALLBACK(g_object_unref), NULL)
 
@@ -123,6 +129,8 @@ void graphene_wm_start(MetaPlugin *self_)
 	g_object_set(clutter_settings_get_default(), "font-dpi", (gint)(requestedDPI * requestedDPIScale), NULL);
 	g_signal_connect_after(clutter_get_default_backend(), "resolution-changed", G_CALLBACK(reset_clutter_dpi), NULL);
 	g_signal_connect(iconLoader, "notify::scale", G_CALLBACK(on_global_scale_changed), NULL);
+	
+	cmk_set_grab_handler((CmkGrabHandler)on_panel_request_modal, self_);
 
 	//g_timeout_add(50, sizewarp, NULL);	
 
@@ -170,7 +178,6 @@ void graphene_wm_start(MetaPlugin *self_)
 	clutter_actor_insert_child_above(self->stage, ACTOR(self->panel), NULL);
 	g_signal_connect_swapped(panelBar, "allocation-changed", G_CALLBACK(update_struts), self);
 	g_signal_connect_swapped(screen, "workspace-switched", G_CALLBACK(update_struts), self);
-	update_struts(self);
 
 	// Cover group goes over everything to "dim" the screen for dialogs
 	self->coverGroup = clutter_actor_new();
@@ -186,6 +193,7 @@ void graphene_wm_start(MetaPlugin *self_)
 	// Update actors when the monitors change/resize
 	g_signal_connect(screen, "monitors_changed", G_CALLBACK(on_monitors_changed), self);
 	on_monitors_changed(screen, self);
+	update_struts(self);
 	
 	// Show everything
 	clutter_actor_show(self->stage);
@@ -665,14 +673,17 @@ static void center_actor_on_primary(GrapheneWM *self, ClutterActor *actor)
 void graphene_wm_minimize(MetaPlugin *plugin, MetaWindowActor *windowActor)
 {
 	ClutterActor *actor = ACTOR(windowActor);
+	if(g_object_get_data(G_OBJECT(actor), "unminimizing") == (gpointer)TRUE)
+		unminimize_done(actor, plugin);
+	g_object_set_data(G_OBJECT(actor), "minimizing", (gpointer)TRUE);
 	
 	// Get the minimized position
 	MetaWindow *window = meta_window_actor_get_meta_window(windowActor);
 	MetaRectangle rect = meta_rect(0,0,0,0);
 	meta_window_get_icon_geometry(window, &rect); // This is set by the Launcher applet
-	// printf("%i, %i, %i, %i\n", rect.x, rect.y, rect.width, rect.height);
 	
 	// Ease the window into its minimized position
+	clutter_actor_remove_all_transitions(actor);
 	clutter_actor_set_pivot_point(actor, 0, 0);
 	clutter_actor_save_easing_state(actor);
 	clutter_actor_set_easing_mode(actor, CLUTTER_EASE_IN_SINE);
@@ -697,11 +708,15 @@ static void minimize_done(ClutterActor *actor, MetaPlugin *plugin)
 	
 	// Must call to complete the minimization
 	meta_plugin_minimize_completed(plugin, META_WINDOW_ACTOR(actor));
+	g_object_set_data(G_OBJECT(actor), "minimizing", (gpointer)FALSE);
 }
 
 void graphene_wm_unminimize(MetaPlugin *plugin, MetaWindowActor *windowActor)
 {
 	ClutterActor *actor = ACTOR(windowActor);
+	if(g_object_get_data(G_OBJECT(actor), "minimizing") == (gpointer)TRUE)
+		minimize_done(actor, plugin);
+	g_object_set_data(G_OBJECT(actor), "unminimizing", (gpointer)TRUE);
 
 	// Get the unminimized position
 	gint x = clutter_actor_get_x(actor);
@@ -717,6 +732,7 @@ void graphene_wm_unminimize(MetaPlugin *plugin, MetaWindowActor *windowActor)
 	clutter_actor_show(actor);
 	
 	// Ease it into its unminimized position
+	clutter_actor_remove_all_transitions(actor);
 	clutter_actor_set_pivot_point(actor, 0, 0);
 	clutter_actor_save_easing_state(actor);
 	clutter_actor_set_easing_mode(actor, CLUTTER_EASE_OUT_SINE);
@@ -736,6 +752,7 @@ static void unminimize_done(ClutterActor *actor, MetaPlugin *plugin)
 {
 	g_signal_handlers_disconnect_by_func(actor, unminimize_done, plugin);
 	meta_plugin_unminimize_completed(plugin, META_WINDOW_ACTOR(actor));
+	g_object_set_data(G_OBJECT(actor), "unminimizing", (gpointer)FALSE);
 }
 
 void graphene_wm_destroy(MetaPlugin *plugin, MetaWindowActor *windowActor)

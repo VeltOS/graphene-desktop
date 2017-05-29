@@ -48,6 +48,8 @@ add_executable(graphene-desktop
 	csk/audio.c
 	csk/backlight.c
 	csk/network.c
+	settings-panels/network-panel.c
+	settings-panels/settings-panel.c
 	status-icons.c
 	panel.c
 	panel-launcher.c

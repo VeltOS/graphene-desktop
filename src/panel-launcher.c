@@ -94,6 +94,7 @@ static void graphene_launcher_popup_init(GrapheneLauncherPopup *self)
 	// This makes allocation/sizing easer, and helps keep the scroll window
 	// from expanding too far.
 	self->scroll = cmk_scroll_box_new(CLUTTER_SCROLL_VERTICALLY);
+	cmk_scroll_box_set_use_shadow(self->scroll, FALSE, FALSE, TRUE, FALSE);
 	ClutterBoxLayout *listLayout = CLUTTER_BOX_LAYOUT(clutter_box_layout_new());
 	clutter_box_layout_set_orientation(listLayout, CLUTTER_ORIENTATION_VERTICAL); 
 	clutter_actor_set_layout_manager(CLUTTER_ACTOR(self->scroll), CLUTTER_LAYOUT_MANAGER(listLayout));

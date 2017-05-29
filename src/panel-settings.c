@@ -97,6 +97,7 @@ static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
 	cmk_widget_set_style_parent(CMK_WIDGET(panel), self->window);
 	
 	self->scroll = cmk_scroll_box_new(CLUTTER_SCROLL_VERTICALLY);
+	cmk_scroll_box_set_use_shadow(self->scroll, FALSE, FALSE, TRUE, FALSE);
 	clutter_actor_set_layout_manager(CLUTTER_ACTOR(self->scroll), clutter_bin_layout_new(CLUTTER_BIN_ALIGNMENT_START,CLUTTER_BIN_ALIGNMENT_START));
 	clutter_actor_set_reactive(CLUTTER_ACTOR(self->scroll), TRUE);
 	clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), CLUTTER_ACTOR(panel));

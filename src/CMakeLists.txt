@@ -29,6 +29,7 @@ pkg_check_modules(LIBPULSEGLIB REQUIRED libpulse-mainloop-glib>=8.0)
 pkg_check_modules(POLKITAGENT REQUIRED polkit-agent-1)
 pkg_check_modules(LIBGNOMEMENU REQUIRED libgnome-menu-3.0>=3.13)
 pkg_check_modules(LIBACT REQUIRED accountsservice>=0.6)
+pkg_check_modules(LIBCMK REQUIRED libcmk)
 link_directories(${LIBMUTTER_LIBRARY_DIRS})
 
 add_executable(graphene-desktop
@@ -68,7 +69,7 @@ target_link_libraries(graphene-desktop
 	${POLKITAGENT_LIBRARIES}
 	${LIBGNOMEMENU_LIBRARIES}
 	${LIBACT_LIBRARIES}
-	/home/aidan/cmk/build/libcmk.so
+	${LIBCMK_LIBRARIES}
 	m
 )
 target_include_directories(graphene-desktop PRIVATE
@@ -79,7 +80,7 @@ target_include_directories(graphene-desktop PRIVATE
 	${POLKITAGENT_INCLUDE_DIRS}
 	${LIBGNOMEMENU_INCLUDE_DIRS}
 	${LIBACT_INCLUDE_DIRS}
-	/usr/include/libcmk
+	${LIBCMK_INCLUDE_DIRS}
 )
 
 # Normally, the CMake install functionality removes the executable's rpath,

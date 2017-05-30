@@ -147,8 +147,12 @@ static CskNetworkManager * csk_network_manager_new(void)
 CskNetworkManager * csk_network_manager_get_default(void)
 {
 	static CskNetworkManager *self = NULL;
-	if(!CSK_IS_NETWORK_MANAGER(self))
-		return (self = csk_network_manager_new());
+	if(!self)
+	{
+		self = csk_network_manager_new();
+		g_object_add_weak_pointer(G_OBJECT(self), (void **)&self);
+		return self;
+	}
 	return g_object_ref(self);
 }
 
@@ -1231,7 +1235,7 @@ static void csk_network_access_point_self_destruct(CskNetworkAccessPoint *self)
 // reason, so g_variant_dup_bytestring doesn't work.
 static gchar * string_from_ay_iter(GVariantIter *iter)
 {
-	gchar *str;
+	gchar *str = NULL;
 	guint n = g_variant_iter_n_children(iter);
 	if(n > 0)
 	{
@@ -1312,23 +1316,26 @@ static void csk_network_access_point_update_best(CskNetworkAccessPoint *self)
 	CskNetworkAccessPoint *prevBest = self->best ? self : NULL;
 	CskNetworkAccessPoint *best = self;
 	
-	for(GList *it=self->device->readyAps; it!=NULL; it=it->next)
+	if(self->name) // APs with no set name should not be grouped together
 	{
-		CskNetworkAccessPoint *ap = it->data;
-		if(ap == self)
-			continue;
-		
-		// Only check APs that are the "same"
-		if(ap->security == self->security && 
-		   g_strcmp0(ap->name, self->name) == 0)
+		for(GList *it=self->device->readyAps; it!=NULL; it=it->next)
 		{
-			if(ap->best)
-				prevBest = ap;
+			CskNetworkAccessPoint *ap = it->data;
+			if(ap == self)
+				continue;
 			
-			if(ap->strength > strength)
+			// Only check APs that are the "same"
+			if(ap->security == self->security
+			&& g_strcmp0(ap->name, self->name) == 0)
 			{
-				strength = ap->strength;
-				best = ap;
+				if(ap->best)
+					prevBest = ap;
+				
+				if(ap->strength > strength)
+				{
+					strength = ap->strength;
+					best = ap;
+				}
 			}
 		}
 	}
@@ -1354,19 +1361,35 @@ static void csk_network_access_point_update_best(CskNetworkAccessPoint *self)
 
 static void csk_network_access_point_update_icon(CskNetworkAccessPoint *self)
 {
-	const gchar *name = "none";
-	if(self->strength > 80)
-		name = "excellent";
-	else if(self->strength > 60)
-		name = "good";
-	else if(self->strength > 40)
-		name = "ok";
-	else if(self->strength > 20)
-		name = "weak";
+	if(!self->device)
+		return;
 	
-	g_free(self->icon);
-	self->icon = g_strdup_printf("network-wireless-signal-%s-symbolic", name);
-	g_object_notify_by_pspec(G_OBJECT(self), apProperties[AP_PROP_ICON]);
+	if(self->device->type == CSK_NDEVICE_TYPE_WIRED)
+	{
+		g_free(self->icon);
+		self->icon = g_strdup("network-wired-symbolic");
+	}
+	else if(self->device->type == CSK_NDEVICE_TYPE_BLUETOOTH)
+	{
+		g_free(self->icon);
+		self->icon = g_strdup("bluetooth-symbolic");
+	}
+	else if(self->device->type == CSK_NDEVICE_TYPE_WIFI)
+	{
+		const gchar *name = "none";
+		if(self->strength > 80)
+			name = "excellent";
+		else if(self->strength > 60)
+			name = "good";
+		else if(self->strength > 40)
+			name = "ok";
+		else if(self->strength > 20)
+			name = "weak";
+		
+		g_free(self->icon);
+		self->icon = g_strdup_printf("network-wireless-signal-%s-symbolic", name);
+		g_object_notify_by_pspec(G_OBJECT(self), apProperties[AP_PROP_ICON]);
+	}
 }
 
 // Only for org.freedesktop.DBus.Properties interface
@@ -1475,7 +1498,6 @@ CskNSecurityType csk_network_access_point_get_security(CskNetworkAccessPoint *se
 
 const gchar * csk_network_access_point_get_icon(CskNetworkAccessPoint *self)
 {
-	// TODO: Icons for non-Wi-Fi APs
 	return self->icon;
 }
 

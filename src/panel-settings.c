@@ -7,6 +7,7 @@
 #include "panel-internal.h"
 #include <libcmk/cmk.h>
 #include <act/act.h>
+#include "settings-panels/settings-panels.h"
 
 #define PANEL_WIDTH 300
 
@@ -28,6 +29,7 @@ struct _GrapheneSettingsPopup
 	ActUser *user;
 	guint notifyUserChangedId;
 	guint notifyIsLoadedId;
+	GList *panelStack;
 };
 
 G_DEFINE_TYPE(GrapheneSettingsPopup, graphene_settings_popup, CMK_TYPE_WIDGET)
@@ -38,8 +40,8 @@ static void graphene_settings_popup_allocate(ClutterActor *self_, const ClutterA
 static void on_style_changed(CmkWidget *self_);
 static void on_logout_button_activate(CmkButton *button, GrapheneSettingsPopup *self);
 static void on_user_manager_notify_loaded(GrapheneSettingsPopup *self);
-static ClutterActor * separator_new();
-static void enum_settings_widgets(GrapheneSettingsPopup *self);
+static void on_panel_replace(GrapheneSettingsPopup *self, CmkWidget *replacement, CmkWidget *top);
+static void on_panel_back(GrapheneSettingsPopup *self, CmkWidget *top);
 
 GrapheneSettingsPopup * graphene_settings_popup_new(CSettingsLogoutCallback logoutCb, gpointer userdata)
 {
@@ -58,13 +60,6 @@ static void graphene_settings_popup_class_init(GrapheneSettingsPopupClass *class
 	CMK_WIDGET_CLASS(class)->style_changed = on_style_changed;
 }
 
-static ClutterLayoutManager * clutter_vertical_box_new()
-{
-	ClutterBoxLayout *layout = CLUTTER_BOX_LAYOUT(clutter_box_layout_new());
-	clutter_box_layout_set_orientation(layout, CLUTTER_ORIENTATION_VERTICAL); 
-	return CLUTTER_LAYOUT_MANAGER(layout);
-}
-
 static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
 {
 	self->sdc = cmk_shadow_new_full(CMK_SHADOW_MASK_LEFT | CMK_SHADOW_MASK_BOTTOM, 40);
@@ -72,6 +67,7 @@ static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
 
 	self->window = cmk_widget_new();
 	cmk_widget_set_draw_background_color(self->window, TRUE);
+	clutter_actor_set_reactive(CLUTTER_ACTOR(self->window), TRUE);
 	cmk_widget_set_background_color_name(self->window, "background");
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->window));
 
@@ -94,12 +90,18 @@ static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
 
 	clutter_actor_add_child(CLUTTER_ACTOR(self->infoBox), separator_new());
 
-	self->scroll = cmk_scroll_box_new(CLUTTER_SCROLL_VERTICALLY);
-	clutter_actor_set_layout_manager(CLUTTER_ACTOR(self->scroll), clutter_vertical_box_new());
-	clutter_actor_set_reactive(CLUTTER_ACTOR(self->scroll), TRUE);
-	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->scroll));
+	GrapheneSettingsPanel *panel = graphene_settings_panel_new();
+	g_signal_connect_swapped(panel, "replace", G_CALLBACK(on_panel_replace), self);
+	g_signal_connect_swapped(panel, "back", G_CALLBACK(on_panel_back), self);
+	self->panelStack = g_list_prepend(self->panelStack, panel);
+	cmk_widget_set_style_parent(CMK_WIDGET(panel), self->window);
 	
-	enum_settings_widgets(self);
+	self->scroll = cmk_scroll_box_new(CLUTTER_SCROLL_VERTICALLY);
+	cmk_scroll_box_set_use_shadow(self->scroll, FALSE, FALSE, TRUE, FALSE);
+	clutter_actor_set_layout_manager(CLUTTER_ACTOR(self->scroll), clutter_bin_layout_new(CLUTTER_BIN_ALIGNMENT_START,CLUTTER_BIN_ALIGNMENT_START));
+	clutter_actor_set_reactive(CLUTTER_ACTOR(self->scroll), TRUE);
+	clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), CLUTTER_ACTOR(panel));
+	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->scroll));
 
 	self->userManager = act_user_manager_get_default();
 	gboolean isLoaded = FALSE;
@@ -113,6 +115,9 @@ static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
 static void graphene_settings_popup_dispose(GObject *self_)
 {
 	GrapheneSettingsPopup *self = GRAPHENE_SETTINGS_POPUP(self_);
+	if(self->userManager && self->notifyIsLoadedId)
+		g_signal_handler_disconnect(self->userManager, self->notifyIsLoadedId);
+	self->notifyIsLoadedId = 0;
 	G_OBJECT_CLASS(graphene_settings_popup_parent_class)->dispose(self_);
 }
 
@@ -156,6 +161,12 @@ static void on_style_changed(CmkWidget *self_)
 
 static void on_logout_button_activate(CmkButton *button, GrapheneSettingsPopup *self)
 {
+	if(g_list_length(self->panelStack) > 1)
+	{
+		on_panel_back(self, CMK_WIDGET(self->panelStack->data));
+		return;
+	}
+	
 	// Don't destroy after delay, it doesn't look very good
 	clutter_actor_destroy(CLUTTER_ACTOR(self));
 	if(self->logoutCb)
@@ -164,6 +175,8 @@ static void on_logout_button_activate(CmkButton *button, GrapheneSettingsPopup *
 
 static void on_user_updated(GrapheneSettingsPopup *self, ActUser *user)
 {
+	if(g_list_length(self->panelStack) > 1)
+		return;
 	const gchar *realName = NULL;
 
 	if(!user || !(realName = act_user_get_real_name(user)))
@@ -194,86 +207,43 @@ static void on_user_manager_notify_loaded(GrapheneSettingsPopup *self)
 	on_user_updated(self, self->user);
 }
 
-static ClutterActor * separator_new()
+static void on_panel_replace(GrapheneSettingsPopup *self, CmkWidget *replacement, CmkWidget *top)
 {
-	ClutterActor *sep = clutter_actor_new();
-	ClutterColor c = {0,0,0,25};
-	clutter_actor_set_background_color(sep, &c);
-	clutter_actor_set_x_expand(sep, TRUE);
-	clutter_actor_set_height(sep, 2);
-	return sep;
+	if(!self->panelStack || self->panelStack->data != top)
+		return;
+	cmk_widget_fade_out(CMK_WIDGET(top), FALSE);
+	// clutter_actor_hide(CLUTTER_ACTOR(top));
+	g_signal_connect_swapped(replacement, "replace", G_CALLBACK(on_panel_replace), self);
+	g_signal_connect_swapped(replacement, "back", G_CALLBACK(on_panel_back), self);
+	cmk_widget_set_style_parent(replacement, self->window);
+	clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), CLUTTER_ACTOR(replacement));
+	cmk_widget_fade_in(CMK_WIDGET(replacement));
+	gchar *markup = g_strdup_printf("<span font='16'><b>%s</b></span>", clutter_actor_get_name(CLUTTER_ACTOR(replacement)));
+	cmk_label_set_markup(self->usernameLabel, markup);
+	g_free(markup);
+	CmkIcon *buttonIcon = CMK_ICON(cmk_button_get_content(self->logoutButton));
+	cmk_icon_set_icon(buttonIcon, "back");
+	self->panelStack = g_list_prepend(self->panelStack, replacement);
 }
 
-static void on_settings_widget_clicked(GrapheneSettingsPopup *self, CmkButton *button)
+static void on_panel_back(GrapheneSettingsPopup *self, CmkWidget *top)
 {
-	const gchar *args = clutter_actor_get_name(CLUTTER_ACTOR(button));
+	if(!self->panelStack || self->panelStack->data != top)
+		return;
 	
-	// Delay so the click animation can be seen
-	clutter_threads_add_timeout(200, (GSourceFunc)clutter_actor_destroy, self);
-
-	gchar **argsSplit = g_new0(gchar *, 3);
-	argsSplit[0] = g_strdup("gnome-control-center");
-	argsSplit[1] = g_strdup(clutter_actor_get_name(CLUTTER_ACTOR(button)));
-	g_spawn_async(NULL, argsSplit, NULL, G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL | G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL);
-	g_strfreev(argsSplit);
-}
-
-static void add_setting_widget(GrapheneSettingsPopup *self, const gchar *title, const gchar *iconName, gboolean toggleable, const gchar *panel, gboolean bottomSeparator)
-{	
-	clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), separator_new());
-
-	CmkButton *button = cmk_button_new();
-	CmkIcon *icon = cmk_icon_new_from_name(iconName, 24);
-	cmk_button_set_content(button, CMK_WIDGET(icon));
-	cmk_button_set_text(button, title);
-	cmk_widget_set_style_parent(CMK_WIDGET(button), CMK_WIDGET(self->window));
-	clutter_actor_set_x_expand(CLUTTER_ACTOR(button), TRUE);
-	clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), CLUTTER_ACTOR(button));
-	
-	clutter_actor_set_name(CLUTTER_ACTOR(button), panel);
-	g_signal_connect_swapped(button, "activate", G_CALLBACK(on_settings_widget_clicked), self);
-	
-	if(bottomSeparator)
-		clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), separator_new());
-}
-
-static void add_settings_category_label(GrapheneSettingsPopup *self, const gchar *title)
-{
-	CmkLabel *label = cmk_label_new_with_text(title);
-	cmk_widget_set_style_parent(CMK_WIDGET(label), CMK_WIDGET(self));
-	clutter_actor_set_x_expand(CLUTTER_ACTOR(label), TRUE);
-	clutter_actor_set_x_align(CLUTTER_ACTOR(label), CLUTTER_ACTOR_ALIGN_START);
-	ClutterMargin margin = {50, 40, 20, 20};
-	clutter_actor_set_margin(CLUTTER_ACTOR(label), &margin);
-	clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), CLUTTER_ACTOR(label));
-
-	//ClutterActor *sep = separator_new();
-	//clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), sep);
-}
-
-static void enum_settings_widgets(GrapheneSettingsPopup *self)
-{
-	add_settings_category_label(self, "Personal");
-	add_setting_widget(self, "Background",       "preferences-desktop-wallpaper",    TRUE,  "background",     FALSE);
-	add_setting_widget(self, "Notifications",    "preferences-system-notifications", TRUE,  "notifications",  FALSE);
-	add_setting_widget(self, "Privacy",          "preferences-system-privacy",       FALSE, "privacy",        FALSE);
-	add_setting_widget(self, "Region & Language","preferences-desktop-locale",       FALSE, "region",         FALSE);
-	add_setting_widget(self, "Search",           "preferences-system-search",        FALSE, "search",         TRUE);
-	add_settings_category_label(self, "Hardware");
-	add_setting_widget(self, "Bluetooth",        "bluetooth",                        TRUE,  "bluetooth",      FALSE);
-	add_setting_widget(self, "Color",            "preferences-color",                FALSE, "color",          FALSE);
-	add_setting_widget(self, "Displays",         "preferences-desktop-display",      FALSE, "display",        FALSE);
-	add_setting_widget(self, "Keyboard",         "input-keyboard",                   FALSE, "keyboard",       FALSE);
-	add_setting_widget(self, "Mouse & Touchpad", "input-mouse",                      FALSE, "mouse",          FALSE);
-	add_setting_widget(self, "Network",          "network-workgroup",                TRUE,  "network",        FALSE);
-	add_setting_widget(self, "Power",            "gnome-power-manager",              FALSE, "power",          FALSE);
-	add_setting_widget(self, "Printers",         "printer",                          FALSE, "printers",       FALSE);
-	add_setting_widget(self, "Sound",            "multimedia-volume-control",        TRUE,  "sound",          FALSE);
-	add_setting_widget(self, "Wacom Tablet",     "input-tablet",                     FALSE, "wacom",          TRUE);
-	add_settings_category_label(self, "System");
-	add_setting_widget(self, "Date & Time",      "preferences-system-time",          FALSE, "datetime",       FALSE);
-	add_setting_widget(self, "Details",          "applications-system",              FALSE, "info",           FALSE);
-	add_setting_widget(self, "Sharing",          "preferences-system-sharing",       FALSE, "sharing",        FALSE);
-	add_setting_widget(self, "Universal",        "preferences-desktop-accessibility",FALSE, "universal-access",FALSE);
-	add_setting_widget(self, "Users",            "system-users",                     FALSE, "user-accounts",  TRUE);
+	cmk_widget_fade_out(CMK_WIDGET(top), TRUE);
+	self->panelStack = g_list_delete_link(self->panelStack, self->panelStack);
+	if(self->panelStack)
+	{
+		cmk_widget_fade_in(CMK_WIDGET(self->panelStack->data));
+		if(g_list_length(self->panelStack) == 1)
+		{
+			on_user_updated(self, self->user);
+			CmkIcon *buttonIcon = CMK_ICON(cmk_button_get_content(self->logoutButton));
+			cmk_icon_set_icon(buttonIcon, "system-shutdown-symbolic");
+			// cmk_icon_set_size(buttonIcon, 32);
+		}
+	}
+	else
+		clutter_actor_destroy(CLUTTER_ACTOR(self));
 }

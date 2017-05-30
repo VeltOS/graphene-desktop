@@ -25,12 +25,19 @@
  * is under the Apache License and in its own file.
  */
 
-#include <config.h>
 #include <meta/main.h>
 #include <meta/meta-plugin.h>
 #include <glib-unix.h>
 #include "session.h"
 #include "wm.h"
+
+#ifndef GRAPHENE_VERSION_STR
+#define GRAPHENE_VERSION_STR ""
+#endif
+
+#ifndef GRAPHENE_DEBUG
+#define GRAPHENE_DEBUG ""
+#endif
 
 G_DEFINE_TYPE(GrapheneWM, graphene_wm, META_TYPE_PLUGIN);
 static gboolean on_exit_signal(gpointer userdata);

@@ -5,12 +5,15 @@
 cmake_minimum_required(VERSION 3.4)
 project(graphene-desktop)
 
-set(GRAPHENE_VERSION 0.2.6)
+set(GRAPHENE_VERSION 0.2.7)
 set(GRAPHENE_DEBUG TRUE)
 
 if(GRAPHENE_DEBUG)
 	set(CMAKE_BUILD_TYPE DEBUG)
+	add_definitions(-DGRAPHENE_DEBUG)
 endif()
+
+add_definitions(-DGRAPHENE_VERSION_STR=\"${GRAPHENE_VERSION}\")
 
 # Assume the user wants to install Graphene to /usr unless otherwise specified
 # with the -DCMAKE_INSTALL_PREFIX=<path> flag to cmake. http://stackoverflow.com/a/16076855
@@ -19,7 +22,6 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 endif()
 
 # Config
-configure_file(${PROJECT_SOURCE_DIR}/config.h.in ${PROJECT_BINARY_DIR}/config.h)
 include_directories(${PROJECT_BINARY_DIR})
 
 # Acquire libraries needed for all targets

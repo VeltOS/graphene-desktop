@@ -7,7 +7,6 @@
 #include "notifications.h"
 #include <libcmk/cmk.h>
 #include <notifications-dbus-iface.h>
-#include <config.h>
 
 #define NOTIFICATION_DEFAULT_SHOW_TIME 5000 // ms
 #define NOTIFICATION_URGENCY_LOW 0
@@ -222,6 +221,10 @@ static gboolean on_dbus_call_close_notification(GrapheneNotificationBox *self, G
 	dbus_notifications_complete_close_notification(object, invocation);
 	return TRUE;
 }
+
+#ifndef GRAPHENE_VERSION_STR
+#define GRAPHENE_VERSION_STR ""
+#endif
 
 static gboolean on_dbus_call_get_server_information(GrapheneNotificationBox *self, GDBusMethodInvocation *invocation, DBusNotifications *object)
 {

@@ -49,6 +49,7 @@ add_executable(graphene-desktop
 	csk/audio.c
 	csk/backlight.c
 	csk/network.c
+	csk/battery.c
 	settings-panels/network-panel.c
 	settings-panels/settings-panel.c
 	status-icons.c
@@ -56,7 +57,6 @@ add_executable(graphene-desktop
 	panel-launcher.c
 	panel-settings.c
 	panel-clock.c
-	settings-battery.c
 	network.c
 	notifications-dbus-iface.c
 	notifications.c

@@ -128,16 +128,16 @@ static void volume_icon_on_update(GrapheneVolumeIcon *self, const GParamSpec *sp
 }
 
 
-#include "settings-battery.h"
+#include "csk/battery.h"
 
 struct _GrapheneBatteryIcon
 {
 	CmkIcon parent;
-	GrapheneBatteryInfo *batInfo;
+	CskBatteryInfo *batInfo;
 };
 
 static void graphene_battery_icon_dispose(GObject *self_);
-static void battery_icon_on_update(GrapheneBatteryIcon *self, GrapheneBatteryInfo *info);
+static void battery_icon_on_update(GrapheneBatteryIcon *self, CskBatteryInfo *info);
 
 G_DEFINE_TYPE(GrapheneBatteryIcon, graphene_battery_icon, CMK_TYPE_ICON)
 
@@ -162,7 +162,7 @@ static void graphene_battery_icon_init(GrapheneBatteryIcon *self)
 	cmk_widget_style_set_color(CMK_WIDGET(self), "warning", &bg); 
 	cmk_widget_style_set_color(CMK_WIDGET(self), "warning-foreground", &fg); 
 
-	self->batInfo = graphene_battery_info_get_default();
+	self->batInfo = csk_battery_info_get_default();
 	g_signal_connect_swapped(self->batInfo, "update", G_CALLBACK(battery_icon_on_update), self);
 	battery_icon_on_update(self, self->batInfo);
 }
@@ -172,13 +172,13 @@ static void graphene_battery_icon_dispose(GObject *self_)
 	G_OBJECT_CLASS(graphene_battery_icon_parent_class)->dispose(self_);
 }
 
-static void battery_icon_on_update(GrapheneBatteryIcon *self, GrapheneBatteryInfo *info)
+static void battery_icon_on_update(GrapheneBatteryIcon *self, CskBatteryInfo *info)
 {
-	gchar *iconName = graphene_battery_info_get_icon_name(info);
+	gchar *iconName = csk_battery_info_get_icon_name(info);
 	cmk_icon_set_icon(CMK_ICON(self), iconName);
 	g_free(iconName);
 
-	if(graphene_battery_info_get_percent(info) <= 15)
+	if(csk_battery_info_get_percent(info) <= 15)
 		cmk_widget_set_background_color_name(CMK_WIDGET(self), "warning");
 	else
 		cmk_widget_set_background_color_name(CMK_WIDGET(self), NULL);

@@ -7,7 +7,7 @@
 #include "panel.h"
 #include "panel-internal.h"
 #include <libcmk/cmk.h>
-#include "settings-battery.h"
+#include "csk/battery.h"
 #include "network.h"
 #include "status-icons.h"
 #include "status-notifier-host.h"

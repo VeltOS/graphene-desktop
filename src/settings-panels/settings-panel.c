@@ -141,7 +141,8 @@ static void enum_settings_widgets(GrapheneSettingsPanel *self)
 	add_setting_widget(self, "Displays",         "preferences-desktop-display",      "display",       FALSE);
 	add_setting_widget(self, "Keyboard",         "input-keyboard",                   "keyboard",      FALSE);
 	add_setting_widget(self, "Mouse & Touchpad", "input-mouse",                      "mouse",         FALSE);
-	add_setting_widget_n(self, "Network",          "network-workgroup",                GRAPHENE_TYPE_NETWORK_PANEL,       TRUE);
+	add_setting_widget(self, "Network",          "network-workgroup",                "network",       TRUE);
+	//add_setting_widget_n(self, "Network",          "network-workgroup",                GRAPHENE_TYPE_NETWORK_PANEL,       TRUE);
 	add_setting_widget(self, "Power",            "gnome-power-manager",              "power",         FALSE);
 	add_setting_widget(self, "Printers",         "printer",                          "printers",      FALSE);
 	add_setting_widget(self, "Sound",            "multimedia-volume-control",        "sound",         TRUE);

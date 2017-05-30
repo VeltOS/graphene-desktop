@@ -3,7 +3,7 @@
  - [x] Logout inhibitors
  - [ ] User selection on PolKit dialog
  - [ ] Screensaver
- - [ ] Brightness control GUI
+ - [x] Brightness control GUI
  
 - System Tray
  - [ ] Animated pixmaps icons
@@ -11,17 +11,17 @@
  
 - General Panel
  - [ ] Tasklist context menu items
- - [ ] Shadows in panel popup scrolling
- - [ ] Fix search bar overflow
+ - [x] Shadows in panel popup scrolling
+ - [x] Fix search bar overflow
  - [ ] Imbedded Settings subpanels
- 
+  
 - Accessibility
  - [ ] Tab control support
+    - Partially working
  - [ ] Screen reading support
  - [ ] Screen keyboard support
  
 - Other
  - [x] Button press animation
- - [ ] Hightlight animation
  - [ ] Notification action buttons
  - [ ] i18n

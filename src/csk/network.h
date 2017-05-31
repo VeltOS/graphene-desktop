@@ -66,10 +66,19 @@ CskNetworkManager * csk_network_manager_get_default(void);
 const GList * csk_network_manager_get_devices(CskNetworkManager *nm);
 
 /*
+ * Gets the active access point from the primary device access point,
+ * or NULL if disconnected from the network.
+ */
+//CskNetworkAccessPoint * csk_network_manager_get_primary_access_point(CskNetworkManager *nm);
+
+/*
  * The name of an icon to represent the overall connection status.
+ * Same as the icon property on the primary access point.
  * Listen to the "notify::icon" signal for changes to this.
  */
-const gchar * csk_network_manager_get_icon(CskNetworkManager *nm);
+//const gchar * csk_network_manager_get_icon(CskNetworkManager *nm);
+
+
 
 /*
  * Gets the type of device.
@@ -94,7 +103,7 @@ const gchar * csk_network_device_get_mac(CskNetworkDevice *device);
 /*
  * The device's connection status.
  */
-CskNConnectionStatus * csk_network_device_get_connection_status(CskNetworkDevice *device);
+CskNConnectionStatus csk_network_device_get_connection_status(CskNetworkDevice *device);
 
 /*
  * An array of all IP addresses currently assigned to this device.
@@ -123,6 +132,11 @@ void csk_network_device_scan(CskNetworkDevice *device);
  * inert forever, only useful for pointer comparisons.
  */
 const GList * csk_network_device_get_access_points(CskNetworkDevice *device);
+
+/*
+ * Active access point on this device, or NULL if disconnected.
+ */
+CskNetworkAccessPoint * csk_network_device_get_active_access_point(CskNetworkDevice *device);
 
 
 
@@ -162,6 +176,20 @@ guint csk_network_access_point_get_strength(CskNetworkAccessPoint *ap);
  * list, to avoid showing lots of networks that are all really the "same."
  */
 gboolean csk_network_access_point_is_best(CskNetworkAccessPoint *ap);
+
+/*
+ * Returns TRUE if this AP is the active AP of its device.
+ * Equivelent to
+ * csk_network_device_get_active_access_point(csk_network_access_point_get_device(ap)) == ap
+ */
+gboolean csk_network_access_point_is_active(CskNetworkAccessPoint *ap);
+
+/*
+ * Returns TRUE if ap represents the same network as other. They must be of
+ * the same device, have the same security type, and have the same name.
+ * Always returns TRUE if ap is passed for other.
+ */
+gboolean csk_network_access_point_matches(CskNetworkAccessPoint *ap, CskNetworkAccessPoint *other);
 
 /*
  * Gets the security type in use by this AP (Wi-Fi only).

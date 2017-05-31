@@ -55,9 +55,11 @@ struct _CskNetworkDevice
 	gchar *name;
 	GList *aps;
 	GList *readyAps;
+	CskNetworkAccessPoint *activeAp;
 	
 	guint nmSignalSubId;
 	gchar *nmDevicePath;
+	gchar *nmActiveAp; // Only for WiFi devices
 };
 
 struct _CskNetworkAccessPoint
@@ -93,6 +95,7 @@ enum
 	DV_PROP_NAME,
 	DV_PROP_MAC,
 	DV_PROP_CONNECTION_STATUS,
+	DV_PROP_ACTIVE_AP,
 	DV_PROP_LAST,
 	DV_SIGNAL_AP_ADDED = 1,
 	DV_SIGNAL_AP_REMOVED,
@@ -527,6 +530,13 @@ static void csk_network_device_class_init(CskNetworkDeviceClass *class)
 		                  0, G_MAXINT, CSK_NETWORK_DISCONNECTED,
 		                  G_PARAM_READABLE);
 	
+	deviceProperties[DV_PROP_ACTIVE_AP] =
+		g_param_spec_object("active-ap",
+		                    "Active Access Point",
+		                    "The active CskNetworkAccessPoint, or NULL if none",
+		                    CSK_TYPE_NETWORK_ACCESS_POINT,
+		                    G_PARAM_READABLE);
+
 	g_object_class_install_properties(base, DV_PROP_LAST, deviceProperties);
 	
 	deviceSignals[DV_SIGNAL_AP_ADDED] =
@@ -613,6 +623,9 @@ static void csk_network_device_get_property(GObject *self_, guint propertyId, GV
 	case DV_PROP_CONNECTION_STATUS:
 		g_value_set_uint(value, self->status);
 		break;
+	case DV_PROP_ACTIVE_AP:
+		g_value_set_object(value, self->activeAp);
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(self_, propertyId, pspec);
 		break;
@@ -633,6 +646,8 @@ static void csk_network_device_self_destruct(CskNetworkDevice *self)
 
 static void csk_network_device_remove_all_aps(CskNetworkDevice *self, gboolean emit)
 {
+	self->activeAp = NULL;
+	g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_ACTIVE_AP]);
 	for(GList *it=self->aps; it!=NULL; it=it->next)
 	{
 		CskNetworkAccessPoint *ap = it->data;
@@ -698,7 +713,9 @@ static void on_nm_device_get_properties(GDBusConnection *connection, GAsyncResul
 			ap->device = self;
 			ap->name = g_strdup("ethernet");
 			self->aps = g_list_prepend(self->aps, ap);
+			self->activeAp = ap;
 			csk_network_access_point_init(ap);
+			g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_ACTIVE_AP]);
 		}
 		else
 			csk_network_device_maybe_set_ready(self);			
@@ -708,6 +725,8 @@ static void on_nm_device_get_properties(GDBusConnection *connection, GAsyncResul
 		g_clear_pointer(&self->mac, g_free);
 		g_variant_dict_lookup(&dict, "HwAddress", "s", &self->mac);
 		
+		g_clear_pointer(&self->nmActiveAp, g_free);
+		g_variant_dict_lookup(&dict, "ActiveAccessPoint", "o", &self->nmActiveAp);
 		// List wifi access points
 		g_dbus_connection_call(self->manager->connection,
 			NM_DAEMON_NAME,
@@ -742,7 +761,9 @@ static void on_nm_device_get_properties(GDBusConnection *connection, GAsyncResul
 		ap->device = self;
 		ap->name = name;
 		self->aps = g_list_prepend(self->aps, ap);
+		self->activeAp = ap;
 		csk_network_access_point_init(ap);
+		g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_ACTIVE_AP]);
 	}
 	
 	g_variant_unref(propsV);
@@ -853,6 +874,11 @@ static void nm_device_remove_wifi_ap(CskNetworkDevice *self, const gchar *apPath
 		CskNetworkAccessPoint *ap = it->data;
 		if(g_strcmp0(apPath, ap->nmApPath) == 0)
 		{
+			if(ap == self->activeAp)
+			{
+				self->activeAp = NULL;
+				g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_ACTIVE_AP]);
+			}
 			self->aps = g_list_delete_link(self->aps, it);
 			self->readyAps = g_list_remove(self->readyAps, ap);
 			csk_network_access_point_self_destruct(ap);
@@ -931,6 +957,7 @@ static void on_nm_device_signal(GDBusConnection *connection,
 						ap->device = self;
 						ap->name = g_strdup("ethernet");
 						self->aps = g_list_prepend(self->aps, ap);
+						self->activeAp = ap;
 						csk_network_access_point_init(ap);
 					}
 				}
@@ -949,6 +976,21 @@ static void on_nm_device_signal(GDBusConnection *connection,
 					g_free(self->mac);
 					self->mac = g_variant_dup_string(val, NULL);
 					g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_MAC]);
+				}
+				else if(g_strcmp0(key, "ActiveAccessPoint") == 0)
+				{
+					DO_ON_INVALID_FORMAT_STRING(val, "o", continue, TRUE);
+					g_free(self->nmActiveAp);
+					self->nmActiveAp = g_variant_dup_string(val, NULL);
+					g_message("active ap changed: %s", self->nmActiveAp);
+					self->activeAp = NULL;
+					for(GList *it=self->readyAps; it!=NULL; it=it->next)
+						if(g_strcmp0(CSK_NETWORK_ACCESS_POINT(it->data)->nmApPath, self->nmActiveAp) == 0)
+						{
+							self->activeAp = it->data;
+							break;
+						}
+					g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_ACTIVE_AP]);
 				}
 				g_variant_unref(val);
 			}
@@ -1053,6 +1095,11 @@ void csk_network_device_scan(CskNetworkDevice *self)
 const GList * csk_network_device_get_access_points(CskNetworkDevice *self)
 {
 	return self->readyAps;
+}
+
+CskNetworkAccessPoint * csk_network_device_get_active_access_point(CskNetworkDevice *self)
+{
+	return self->activeAp;
 }
 
 
@@ -1296,9 +1343,18 @@ static void csk_network_access_point_set_ready(CskNetworkAccessPoint *self)
 	self->device->readyAps = g_list_prepend(self->device->readyAps, self);
 	csk_network_access_point_update_best(self);
 	csk_network_access_point_update_icon(self);
+	
 	if(self->device->ready)
 		g_signal_emit(self->device, deviceSignals[DV_SIGNAL_AP_ADDED], 0, self);
-	else
+	
+	if(self->nmApPath && g_strcmp0(self->nmApPath, self->device->nmActiveAp) == 0)
+	{
+		self->device->activeAp = self;
+		if(self->device->ready)
+			g_object_notify_by_pspec(G_OBJECT(self->device), deviceProperties[DV_PROP_ACTIVE_AP]);
+	}
+
+	if(!self->device->ready)
 		csk_network_device_maybe_set_ready(self->device);
 }
 
@@ -1325,8 +1381,7 @@ static void csk_network_access_point_update_best(CskNetworkAccessPoint *self)
 				continue;
 			
 			// Only check APs that are the "same"
-			if(ap->security == self->security
-			&& g_strcmp0(ap->name, self->name) == 0)
+			if(csk_network_access_point_matches(self, ap))
 			{
 				if(ap->best)
 					prevBest = ap;
@@ -1463,41 +1518,68 @@ static void on_nm_ap_signal(GDBusConnection *connection,
 
 CskNetworkDevice * csk_network_access_point_get_device(CskNetworkAccessPoint *self)
 {
+	g_return_val_if_fail(CSK_IS_NETWORK_ACCESS_POINT(self), NULL);
 	return self->device;
 }
 
 CskNConnectionStatus csk_network_access_point_get_connection_status(CskNetworkAccessPoint *self)
 {
+	g_return_val_if_fail(CSK_IS_NETWORK_ACCESS_POINT(self), CSK_NETWORK_DISCONNECTED);
 	return self->status;
 }
 
 const gchar * csk_network_access_point_get_name(CskNetworkAccessPoint *self)
 {
+	g_return_val_if_fail(CSK_IS_NETWORK_ACCESS_POINT(self), NULL);
 	return self->name;
 }
 
 const gchar * csk_network_access_point_get_mac(CskNetworkAccessPoint *self)
 {
+	g_return_val_if_fail(CSK_IS_NETWORK_ACCESS_POINT(self), NULL);
 	return self->remoteMac;
 }
 
 guint csk_network_access_point_get_strength(CskNetworkAccessPoint *self)
 {
+	g_return_val_if_fail(CSK_IS_NETWORK_ACCESS_POINT(self), 0);
 	return self->strength;
 }
 
 gboolean csk_network_access_point_is_best(CskNetworkAccessPoint *self)
 {
+	g_return_val_if_fail(CSK_IS_NETWORK_ACCESS_POINT(self), FALSE);
 	return self->best;
+}
+
+gboolean csk_network_access_point_is_active(CskNetworkAccessPoint *self)
+{
+	g_return_val_if_fail(CSK_IS_NETWORK_ACCESS_POINT(self), FALSE);
+	if(!self->device)
+		return FALSE;
+	return self->device->activeAp == self;
+}
+
+gboolean csk_network_access_point_matches(CskNetworkAccessPoint *self, CskNetworkAccessPoint *other)
+{
+	if(!self || !other)
+		return FALSE;
+	if(self == other)
+		return TRUE;
+	return self->device == other->device
+	       && self->security == other->security
+	       && g_strcmp0(self->name, other->name) == 0;
 }
 
 CskNSecurityType csk_network_access_point_get_security(CskNetworkAccessPoint *self)
 {
+	g_return_val_if_fail(CSK_IS_NETWORK_ACCESS_POINT(self), CSK_NSECURITY_NONE);
 	return self->security;
 }
 
 const gchar * csk_network_access_point_get_icon(CskNetworkAccessPoint *self)
 {
+	g_return_val_if_fail(CSK_IS_NETWORK_ACCESS_POINT(self), NULL);
 	return self->icon;
 }
 

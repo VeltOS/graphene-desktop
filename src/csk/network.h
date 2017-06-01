@@ -66,17 +66,15 @@ CskNetworkManager * csk_network_manager_get_default(void);
 const GList * csk_network_manager_get_devices(CskNetworkManager *nm);
 
 /*
- * Gets the active access point from the primary device access point,
- * or NULL if disconnected from the network.
+ * Gets the primary device, or NULL if none.
  */
-//CskNetworkAccessPoint * csk_network_manager_get_primary_access_point(CskNetworkManager *nm);
+CskNetworkDevice * csk_network_manager_get_primary_device(CskNetworkManager *nm);
 
 /*
- * The name of an icon to represent the overall connection status.
- * Same as the icon property on the primary access point.
+ * Gets an icon to represent the overall connection status.
  * Listen to the "notify::icon" signal for changes to this.
  */
-//const gchar * csk_network_manager_get_icon(CskNetworkManager *nm);
+const gchar * csk_network_manager_get_icon(CskNetworkManager *nm);
 
 
 
@@ -104,6 +102,11 @@ const gchar * csk_network_device_get_mac(CskNetworkDevice *device);
  * The device's connection status.
  */
 CskNConnectionStatus csk_network_device_get_connection_status(CskNetworkDevice *device);
+
+/*
+ * Gets an icon to represent the status of the device.
+ */
+const gchar * csk_network_device_get_icon(CskNetworkDevice *device);
 
 /*
  * An array of all IP addresses currently assigned to this device.

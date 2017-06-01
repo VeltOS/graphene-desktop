@@ -31,10 +31,12 @@ struct _CskNetworkManager
 	gchar *icon;
 	GList *devices;
 	GList *readyDevices; // Devices that have completed initializing
+	CskNetworkDevice *primaryDevice;
 
 	gchar *nmDaemonOwner;
 	guint nmDaemonWatchId;
 	guint nmSignalSubId;
+	gchar *nmPrimaryDevice;
 };
 
 struct _CskNetworkDevice
@@ -53,6 +55,7 @@ struct _CskNetworkDevice
 	gchar *interface;
 	gchar *mac;
 	gchar *name;
+	gchar *icon;
 	GList *aps;
 	GList *readyAps;
 	CskNetworkAccessPoint *activeAp;
@@ -70,6 +73,7 @@ struct _CskNetworkAccessPoint
 	// to be NULL.
 	CskNetworkDevice *device;
 	GCancellable *cancellable;
+	gboolean ready;
 	
 	CskNSecurityType security;
 	CskNConnectionStatus status;
@@ -86,6 +90,7 @@ struct _CskNetworkAccessPoint
 enum
 {
 	MN_PROP_ICON = 1,
+	MN_PROP_PRIMARY_DEVICE,
 	MN_PROP_LAST,
 	MN_SIGNAL_DEVICE_ADDED = 1,
 	MN_SIGNAL_DEVICE_REMOVED,
@@ -95,6 +100,7 @@ enum
 	DV_PROP_NAME,
 	DV_PROP_MAC,
 	DV_PROP_CONNECTION_STATUS,
+	DV_PROP_ICON,
 	DV_PROP_ACTIVE_AP,
 	DV_PROP_LAST,
 	DV_SIGNAL_AP_ADDED = 1,
@@ -126,20 +132,23 @@ G_DEFINE_TYPE(CskNetworkAccessPoint, csk_network_access_point, G_TYPE_OBJECT)
 
 
 static void csk_network_manager_dispose(GObject *self_);
-static void csk_network_manager_set_property(GObject *self_, guint propertyId, const GValue *value, GParamSpec *pspec);
 static void csk_network_manager_get_property(GObject *self_, guint propertyId, GValue *value, GParamSpec *pspec);
 static void on_nm_daemon_appeared(GDBusConnection *connection, const gchar *name, const gchar *owner, CskNetworkManager *self);
 static void on_nm_daemon_vanished(GDBusConnection *connection, const gchar *name, CskNetworkManager *self);
+static void on_nm_daemon_get_properties(GDBusConnection *connection, GAsyncResult *res, CskNetworkManager *self);
 static void on_nm_daemon_signal(GDBusConnection *connection, const gchar *sender, const gchar *object, const gchar *interface, const gchar *signal, GVariant *parameters, CskNetworkManager *self);
-static void on_nm_get_all_devices(GDBusConnection *connection, GAsyncResult *res, CskNetworkManager *self);
+static void nm_daemon_update_properties(CskNetworkManager *self, GVariantDict *dict);
 static void add_nm_device(CskNetworkManager *self, const gchar *devicePath);
 static void remove_nm_device(CskNetworkManager *self, const gchar *devicePath);
 static void csk_network_manager_remove_all_devices(CskNetworkManager *self, gboolean emit);
+static void on_nm_primary_connection_get_device(GDBusConnection *connection, GAsyncResult *res, CskNetworkManager *self);
+static void manager_update_icon(CskNetworkManager *self);
 
 static void csk_network_device_self_destruct(CskNetworkDevice *self);
-static void cnm_device_update_type(CskNetworkDevice *self, guint32 nmType);
+static void nm_device_update_type(CskNetworkDevice *self, guint32 nmType);
 
 static void csk_network_access_point_self_destruct(CskNetworkAccessPoint *self);
+
 
 
 static CskNetworkManager * csk_network_manager_new(void)
@@ -147,23 +156,10 @@ static CskNetworkManager * csk_network_manager_new(void)
 	return CSK_NETWORK_MANAGER(g_object_new(CSK_TYPE_NETWORK_MANAGER, NULL));
 }
 
-CskNetworkManager * csk_network_manager_get_default(void)
-{
-	static CskNetworkManager *self = NULL;
-	if(!self)
-	{
-		self = csk_network_manager_new();
-		g_object_add_weak_pointer(G_OBJECT(self), (void **)&self);
-		return self;
-	}
-	return g_object_ref(self);
-}
-
 static void csk_network_manager_class_init(CskNetworkManagerClass *class)
 {
 	GObjectClass *base = G_OBJECT_CLASS(class);
 	base->dispose = csk_network_manager_dispose;
-	base->set_property = csk_network_manager_set_property;
 	base->get_property = csk_network_manager_get_property;
 	
 	managerProperties[MN_PROP_ICON] =
@@ -171,6 +167,13 @@ static void csk_network_manager_class_init(CskNetworkManagerClass *class)
 		                    "Icon",
 		                    "Icon representing overall connection status",
 		                    NULL,
+		                    G_PARAM_READABLE);
+		
+	managerProperties[MN_PROP_PRIMARY_DEVICE] =
+		g_param_spec_object("primary-device",
+		                    "Primary Device",
+		                    "The device of the active connection",
+		                    CSK_TYPE_NETWORK_DEVICE,
 		                    G_PARAM_READABLE);
 	
 	g_object_class_install_properties(base, MN_PROP_LAST, managerProperties);
@@ -194,6 +197,8 @@ static void csk_network_manager_class_init(CskNetworkManagerClass *class)
 
 static void csk_network_manager_init(CskNetworkManager *self)
 {
+	manager_update_icon(self);
+	
 	self->cancellable = g_cancellable_new();
 	
 	self->nmDaemonWatchId = g_bus_watch_name(G_BUS_TYPE_SYSTEM,
@@ -223,16 +228,6 @@ static void csk_network_manager_dispose(GObject *self_)
 	G_OBJECT_CLASS(csk_network_manager_parent_class)->dispose(self_);
 }
 
-static void csk_network_manager_set_property(GObject *self_, guint propertyId, const GValue *value, GParamSpec *pspec)
-{
-	switch(propertyId)
-	{
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID(self_, propertyId, pspec);
-		break;
-	}
-}
-
 static void csk_network_manager_get_property(GObject *self_, guint propertyId, GValue *value, GParamSpec *pspec)
 {
 	CskNetworkManager *self = CSK_NETWORK_MANAGER(self_);
@@ -241,16 +236,13 @@ static void csk_network_manager_get_property(GObject *self_, guint propertyId, G
 	case MN_PROP_ICON:
 		g_value_set_string(value, self->icon);
 		break;
+	case MN_PROP_PRIMARY_DEVICE:
+		g_value_set_object(value, self->primaryDevice);
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(self_, propertyId, pspec);
 		break;
 	}
-}
-
-const GList * csk_network_manager_get_devices(CskNetworkManager *self)
-{
-	g_return_val_if_fail(CSK_IS_NETWORK_MANAGER(self), NULL);
-	return self->readyDevices;
 }
 
 // Multiple daemons (ie. NetworkManager and WICD) being available is a user
@@ -274,7 +266,7 @@ static void on_nm_daemon_appeared(GDBusConnection *connection, const gchar *name
 	self->nmDaemonOwner = g_strdup(owner);
 	self->nmSignalSubId = g_dbus_connection_signal_subscribe(connection,
 		owner,
-		NM_DAEMON_INTERFACE,
+		NULL, // All interfaces
 		NULL, // All signals
 		NM_DAEMON_PATH,
 		NULL, // All arg0s
@@ -284,17 +276,17 @@ static void on_nm_daemon_appeared(GDBusConnection *connection, const gchar *name
 		NULL);
 	
 	// Get all current devices
-	g_dbus_connection_call(connection,
+	g_dbus_connection_call(self->connection,
 		NM_DAEMON_NAME,
 		NM_DAEMON_PATH,
-		NM_DAEMON_INTERFACE,
-		"GetAllDevices",
-		NULL,
-		G_VARIANT_TYPE("(ao)"),
+		"org.freedesktop.DBus.Properties",
+		"GetAll",
+		g_variant_new("(s)", "org.freedesktop.NetworkManager"),
+		G_VARIANT_TYPE("(a{sv})"),
 		G_DBUS_CALL_FLAGS_NONE,
 		-1,
 		self->cancellable,
-		(GAsyncReadyCallback)on_nm_get_all_devices,
+		(GAsyncReadyCallback)on_nm_daemon_get_properties,
 		self);
 }
 
@@ -307,7 +299,38 @@ static void on_nm_daemon_vanished(GDBusConnection *connection, const gchar *name
 	csk_network_manager_remove_all_devices(self, TRUE);
 }
 
-// Only for the org.freedesktop.NetworkManager interface
+static void on_nm_daemon_get_properties(GDBusConnection *connection, GAsyncResult *res, CskNetworkManager *self)
+{
+	GError *error = NULL;
+	GVariant *propsVT = g_dbus_connection_call_finish(connection, res, &error);
+	if(error)
+	{
+		g_warning("Failed to get NetworkManager properties: %s", error->message);
+		g_error_free(error);
+		return;
+	}
+	
+	GVariant *propsV = g_variant_get_child_value(propsVT, 0);
+	g_variant_unref(propsVT);
+	
+	GVariantDict dict;
+	g_variant_dict_init(&dict, propsV);
+	
+	GVariantIter *iter = NULL;
+	if(g_variant_dict_lookup(&dict, "AllDevices", "ao", &iter))
+	{
+		const gchar *devicePath = NULL;
+		while(g_variant_iter_next(iter, "&o", &devicePath))
+			add_nm_device(self, devicePath);
+		g_variant_iter_free(iter);
+	}
+	
+	nm_daemon_update_properties(self, &dict);
+	
+	g_variant_unref(propsV);
+}
+
+// All interfaces on the daemon object
 static void on_nm_daemon_signal(GDBusConnection *connection,
 	const gchar *sender,
 	const gchar *object,
@@ -322,39 +345,65 @@ static void on_nm_daemon_signal(GDBusConnection *connection,
 		return;
 	}
 	
-	if(g_strcmp0(signal, "DeviceAdded") == 0)
+	if(g_strcmp0(interface, "org.freedesktop.DBus.Properties") == 0)
 	{
-		DO_ON_INVALID_FORMAT_STRING(parameters, "(&o)", return, FALSE);
-		const gchar *path;
-		g_variant_get(parameters, "(&o)", &path);
-		add_nm_device(self, path);
+		if(g_strcmp0(signal, "PropertiesChanged") != 0)
+			return;
+		
+		DO_ON_INVALID_FORMAT_STRING(parameters, "(sa{sv}as)", return, FALSE);
+		
+		GVariant *ifaceV = g_variant_get_child_value(parameters, 0);
+		interface = g_variant_get_string(ifaceV, NULL);
+		gboolean daemonIface = (g_strcmp0(interface, NM_DAEMON_INTERFACE) == 0);
+		g_variant_unref(ifaceV);
+		if(!daemonIface)
+			return;
+		
+		GVariant *propsV = g_variant_get_child_value(parameters, 1);
+		GVariantDict dict;
+		g_variant_dict_init(&dict, propsV);
+		nm_daemon_update_properties(self, &dict);
+
+		g_variant_unref(propsV);
 	}
-	else if(g_strcmp0(signal, "DeviceRemoved") == 0)
+	else if(g_strcmp0(interface, NM_DAEMON_INTERFACE) == 0)
 	{
-		DO_ON_INVALID_FORMAT_STRING(parameters, "(&o)", return, FALSE);
-		const gchar *path;
-		g_variant_get(parameters, "(&o)", &path);
-		remove_nm_device(self, path);
+		if(g_strcmp0(signal, "DeviceAdded") == 0)
+		{
+			DO_ON_INVALID_FORMAT_STRING(parameters, "(&o)", return, FALSE);
+			const gchar *path;
+			g_variant_get(parameters, "(&o)", &path);
+			add_nm_device(self, path);
+		}
+		else if(g_strcmp0(signal, "DeviceRemoved") == 0)
+		{
+			DO_ON_INVALID_FORMAT_STRING(parameters, "(&o)", return, FALSE);
+			const gchar *path;
+			g_variant_get(parameters, "(&o)", &path);
+			remove_nm_device(self, path);
+		}
 	}
 }
 
-static void on_nm_get_all_devices(GDBusConnection *connection, GAsyncResult *res, CskNetworkManager *self)
+static void nm_daemon_update_properties(CskNetworkManager *self, GVariantDict *dict)
 {
-	GError *error = NULL;
-	GVariant *devicesV = g_dbus_connection_call_finish(connection, res, &error);
-	if(error)
+	const gchar *primaryConnection = NULL;
+	if(g_variant_dict_lookup(dict, "PrimaryConnection", "&o", &primaryConnection)
+	&& g_strcmp0(primaryConnection, "/") != 0)
 	{
-		g_warning("Failed to list all NetworkManager devices: %s", error->message);
-		g_error_free(error);
-		return;
+		g_dbus_connection_call(self->connection,
+			NM_DAEMON_NAME,
+			primaryConnection,
+			"org.freedesktop.DBus.Properties",
+			"Get",
+			g_variant_new("(ss)", "org.freedesktop.NetworkManager.Connection.Active", "Devices"),
+			G_VARIANT_TYPE("(v)"),
+			G_DBUS_CALL_FLAGS_NONE,
+			-1,
+			self->cancellable,
+			(GAsyncReadyCallback)on_nm_primary_connection_get_device,
+			self);
 	}
-	
-	g_message("Get all nm devices");
-	GVariantIter *iter = NULL;
-	const gchar *devicePath = NULL;
-	g_variant_get(devicesV, "(ao)", &iter);
-	while(g_variant_iter_next(iter, "&o", &devicePath))
-		add_nm_device(self, devicePath);
 }
 
 static void add_nm_device(CskNetworkManager *self, const gchar *devicePath)
@@ -414,11 +463,80 @@ static void csk_network_manager_remove_all_devices(CskNetworkManager *self, gboo
 	g_clear_pointer(&self->readyDevices, g_list_free);
 }
 
+static void on_nm_primary_connection_get_device(GDBusConnection *connection, GAsyncResult *res, CskNetworkManager *self)
+{
+	GError *error = NULL;
+	GVariant *propsVT = g_dbus_connection_call_finish(connection, res, &error);
+	if(error)
+	{
+		g_warning("Failed to get NetworkManager primary device: %s", error->message);
+		g_error_free(error);
+		return;
+	}
+	
+	// (v) -> v
+	GVariant *propsV = g_variant_get_child_value(propsVT, 0);
+	g_variant_unref(propsVT);
+	// v -> ao
+	GVariant *props = g_variant_get_variant(propsV);
+	g_variant_unref(propsV);
+	
+	g_clear_pointer(&self->nmPrimaryDevice, g_free);
+	self->primaryDevice = NULL;
+	
+	// I have no idea why the ActiveConnection has an array of devices.
+	// The ActiveConnection documentation clearly states that it can only be
+	// applied to one device, and the ActivateConnection function only takes
+	// one device. Sooooo. Just take the first one in the list? I guess?
+	if(g_variant_n_children(props) > 0)
+	{
+		g_variant_get_child(props, 0, "o", &self->nmPrimaryDevice);
+		g_message("get primary device: %s", self->nmPrimaryDevice);
+		
+		for(GList *it=self->readyDevices; it!=NULL; it=it->next)
+		{
+			CskNetworkDevice *device = it->data;
+			if(device->nmDevicePath && g_strcmp0(device->nmDevicePath, device->nmDevicePath) == 0)
+			{
+				g_message("primary device: %s", device->name);
+				self->primaryDevice = device;
+				break;
+			}
+		}
+	}
+	
+	g_variant_unref(props);
+	
+	g_object_freeze_notify(G_OBJECT(self));
+	g_object_notify_by_pspec(G_OBJECT(self), managerProperties[MN_PROP_PRIMARY_DEVICE]);
+	manager_update_icon(self);
+	g_object_thaw_notify(G_OBJECT(self));
+}
+
+// Called when the primary device changes (active connection change),
+// and by the primary device when it updates its icon.
+static void manager_update_icon(CskNetworkManager *self)
+{
+	const gchar *new = NULL;
+	
+	if(self->primaryDevice && self->primaryDevice->icon)
+		new = self->primaryDevice->icon;
+	else
+		new = "network-offline-symbolic";
+	
+	g_message("manager update icon %s", new);
+	if(g_strcmp0(new, self->icon) == 0)
+		return;
+	g_free(self->icon);
+	self->icon = g_strdup(new);
+	g_object_notify_by_pspec(G_OBJECT(self), managerProperties[MN_PROP_ICON]);
+}
+
 // When a new device appears, check to see if any other devices
 // are of the same type. If so, update them all to contain their
 // interface name after their regular name so that users can tell
 // them apart.
-static void set_device_name_and_update_others(CskNetworkManager *self, CskNetworkDevice *device)
+static void manager_update_device_names(CskNetworkManager *self, CskNetworkDevice *device)
 {
 	if(!self)
 		return;
@@ -464,6 +582,37 @@ static void set_device_name_and_update_others(CskNetworkManager *self, CskNetwor
 		g_object_notify_by_pspec(G_OBJECT(device), deviceProperties[DV_PROP_NAME]);
 }
 
+CskNetworkManager * csk_network_manager_get_default(void)
+{
+	static CskNetworkManager *self = NULL;
+	if(!self)
+	{
+		self = csk_network_manager_new();
+		g_object_add_weak_pointer(G_OBJECT(self), (void **)&self);
+		return self;
+	}
+	return g_object_ref(self);
+}
+
+const GList * csk_network_manager_get_devices(CskNetworkManager *self)
+{
+	g_return_val_if_fail(CSK_IS_NETWORK_MANAGER(self), NULL);
+	return self->readyDevices;
+}
+
+CskNetworkDevice * csk_network_manager_get_primary_device(CskNetworkManager *self)
+{
+	g_return_val_if_fail(CSK_IS_NETWORK_MANAGER(self), NULL);
+	return self->primaryDevice;
+}
+
+const gchar * csk_network_manager_get_icon(CskNetworkManager *self)
+{
+	g_return_val_if_fail(CSK_IS_NETWORK_MANAGER(self), NULL);
+	return self->icon;
+}
+
+
 
 /*
  * Code flow for NetworkManager devices:
@@ -485,21 +634,21 @@ static void set_device_name_and_update_others(CskNetworkManager *self, CskNetwor
  */
 
 static void csk_network_device_dispose(GObject *self_);
-static void csk_network_device_set_property(GObject *self_, guint propertyId, const GValue *value, GParamSpec *pspec);
 static void csk_network_device_get_property(GObject *self_, guint propertyId, GValue *value, GParamSpec *pspec);
 static void csk_network_device_remove_all_aps(CskNetworkDevice *self, gboolean emit);
 static void on_nm_device_get_properties(GDBusConnection *connection, GAsyncResult *res, CskNetworkDevice *self);
+static void on_nm_device_signal(GDBusConnection *connection, const gchar *sender, const gchar *object, const gchar *interface, const gchar *signal, GVariant *parameters, CskNetworkDevice *self);
+static void nm_device_update_properties(CskNetworkDevice *self, GVariantDict *dict, const gchar *dbusiface);
 static void on_nm_device_get_wifi_aps(GDBusConnection *connection, GAsyncResult *res, CskNetworkDevice *self);
 static void nm_device_add_wifi_ap(CskNetworkDevice *self, const gchar *apPath);
 static void nm_device_remove_wifi_ap(CskNetworkDevice *self, const gchar *apPath);
 static void csk_network_device_maybe_set_ready(CskNetworkDevice *self);
-static void on_nm_device_signal(GDBusConnection *connection, const gchar *sender, const gchar *object, const gchar *interface, const gchar *signal, GVariant *parameters, CskNetworkDevice *self);
+static void device_update_icon(CskNetworkDevice *self);
 
 static void csk_network_device_class_init(CskNetworkDeviceClass *class)
 {
 	GObjectClass *base = G_OBJECT_CLASS(class);
 	base->dispose = csk_network_device_dispose;
-	base->set_property = csk_network_device_set_property;
 	base->get_property = csk_network_device_get_property;
 	
 	deviceProperties[DV_PROP_DEVICE_TYPE] =
@@ -529,6 +678,13 @@ static void csk_network_device_class_init(CskNetworkDeviceClass *class)
 		                  "Status of device, CskNConnectionStatus",
 		                  0, G_MAXINT, CSK_NETWORK_DISCONNECTED,
 		                  G_PARAM_READABLE);
+	
+	deviceProperties[DV_PROP_ICON] =
+		g_param_spec_string("icon",
+		                    "Icon",
+		                    "Icon to represent the status of the device",
+		                    NULL,
+		                    G_PARAM_READABLE);
 	
 	deviceProperties[DV_PROP_ACTIVE_AP] =
 		g_param_spec_object("active-ap",
@@ -569,6 +725,8 @@ static void csk_network_device_init(CskNetworkDevice *self)
 	g_message("Device init %s", self->nmDevicePath);
 	self->cancellable = g_cancellable_new();
 	
+	device_update_icon(self);
+	
 	if(self->nmDevicePath)
 	{
 		g_dbus_connection_call(self->manager->connection,
@@ -596,16 +754,6 @@ static void csk_network_device_dispose(GObject *self_)
 	G_OBJECT_CLASS(csk_network_device_parent_class)->dispose(self_);
 }
 
-static void csk_network_device_set_property(GObject *self_, guint propertyId, const GValue *value, GParamSpec *pspec)
-{
-	switch(propertyId)
-	{
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID(self_, propertyId, pspec);
-		break;
-	}
-}
-
 static void csk_network_device_get_property(GObject *self_, guint propertyId, GValue *value, GParamSpec *pspec)
 {
 	CskNetworkDevice *self = CSK_NETWORK_DEVICE(self_);
@@ -622,6 +770,9 @@ static void csk_network_device_get_property(GObject *self_, guint propertyId, GV
 		break;
 	case DV_PROP_CONNECTION_STATUS:
 		g_value_set_uint(value, self->status);
+		break;
+	case DV_PROP_ICON:
+		g_value_set_string(value, self->icon);
 		break;
 	case DV_PROP_ACTIVE_AP:
 		g_value_set_object(value, self->activeAp);
@@ -647,7 +798,8 @@ static void csk_network_device_self_destruct(CskNetworkDevice *self)
 static void csk_network_device_remove_all_aps(CskNetworkDevice *self, gboolean emit)
 {
 	self->activeAp = NULL;
-	g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_ACTIVE_AP]);
+	if(self->ready)
+		g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_ACTIVE_AP]);
 	for(GList *it=self->aps; it!=NULL; it=it->next)
 	{
 		CskNetworkAccessPoint *ap = it->data;
@@ -658,6 +810,7 @@ static void csk_network_device_remove_all_aps(CskNetworkDevice *self, gboolean e
 	}
 	g_clear_pointer(&self->aps, g_list_free);
 	g_clear_pointer(&self->readyAps, g_list_free);
+	device_update_icon(self);
 }
 
 static void on_nm_device_get_properties(GDBusConnection *connection, GAsyncResult *res, CskNetworkDevice *self)
@@ -677,56 +830,44 @@ static void on_nm_device_get_properties(GDBusConnection *connection, GAsyncResul
 		return;
 	}
 	
+	CskNDeviceType prevType = self->type;
+
+	// The BT access point should be created before updating properties
+	// to acquire its Name property.
+	if(self->type == CSK_NDEVICE_TYPE_BLUETOOTH)
+	{
+		// TODO
+		// It seems like a Bluetooth device should be able to have
+		// multiple "access points," but NM acts like its only one.
+		// Are the different possible access points handled in the
+		// bluetooth pairing setup? Does the bluetooth driver pick
+		// which device to use for internet? If so, maybe add in
+		// functionality to change the paired bluetooth device by
+		// talking to bluez. For now though, only one AP is necessary.
+		CskNetworkAccessPoint *ap = CSK_NETWORK_ACCESS_POINT(g_object_new(CSK_TYPE_NETWORK_ACCESS_POINT, NULL));
+		ap->device = self;
+		self->aps = g_list_prepend(self->aps, ap);
+		if(self->status != CSK_NETWORK_DISCONNECTED)
+		{
+			self->activeAp = ap;
+			device_update_icon(self);
+		}
+		csk_network_access_point_init(ap);
+		g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_ACTIVE_AP]);
+	}
+	
 	// (a{sv}) -> a{sv}
 	GVariant *propsV = g_variant_get_child_value(propsVT, 0);
 	g_variant_unref(propsVT);
 	
 	GVariantDict dict;
 	g_variant_dict_init(&dict, propsV);
-
-	// Inital device property lookup
-	if(self->type == CSK_NDEVICE_TYPE_UNKNOWN)
+	nm_device_update_properties(self, &dict, NULL);
+	g_variant_unref(propsV);
+	
+	// Only list wifi APs after updating the device-specific properties
+	if(prevType == CSK_NDEVICE_TYPE_WIFI)
 	{
-		g_clear_pointer(&self->interface, g_free);
-		g_variant_dict_lookup(&dict, "Interface", "s", &self->interface);
-		
-		// Get device type and run device-type-specific init
-		guint32 deviceType;
-		if(g_variant_dict_lookup(&dict, "DeviceType", "u", &deviceType))
-			cnm_device_update_type(self, deviceType);
-		else
-			g_warning("Failed to get DeviceType from NetworkManager device: %s", self->nmDevicePath);
-	}
-	else if(self->type == CSK_NDEVICE_TYPE_WIRED)
-	{
-		g_clear_pointer(&self->mac, g_free);
-		g_variant_dict_lookup(&dict, "HwAddress", "s", &self->mac);
-		
-		gboolean carrier = FALSE;
-		g_variant_dict_lookup(&dict, "Carrier", "b", &carrier);
-		
-		// Only create an AP if this device has the ability to connect
-		// to anything. This will be updated on the device's PropertiesChanged
-		if(carrier)
-		{
-			CskNetworkAccessPoint *ap = CSK_NETWORK_ACCESS_POINT(g_object_new(CSK_TYPE_NETWORK_ACCESS_POINT, NULL));
-			ap->device = self;
-			ap->name = g_strdup("ethernet");
-			self->aps = g_list_prepend(self->aps, ap);
-			self->activeAp = ap;
-			csk_network_access_point_init(ap);
-			g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_ACTIVE_AP]);
-		}
-		else
-			csk_network_device_maybe_set_ready(self);			
-	}
-	else if(self->type == CSK_NDEVICE_TYPE_WIFI)
-	{
-		g_clear_pointer(&self->mac, g_free);
-		g_variant_dict_lookup(&dict, "HwAddress", "s", &self->mac);
-		
-		g_clear_pointer(&self->nmActiveAp, g_free);
-		g_variant_dict_lookup(&dict, "ActiveAccessPoint", "o", &self->nmActiveAp);
 		// List wifi access points
 		g_dbus_connection_call(self->manager->connection,
 			NM_DAEMON_NAME,
@@ -741,35 +882,202 @@ static void on_nm_device_get_properties(GDBusConnection *connection, GAsyncResul
 			(GAsyncReadyCallback)on_nm_device_get_wifi_aps,
 			self);
 	}
-	else if(self->type == CSK_NDEVICE_TYPE_BLUETOOTH)
-	{
-		g_clear_pointer(&self->mac, g_free);
-		g_variant_dict_lookup(&dict, "HwAddress", "s", &self->mac);
-		
-		gchar *name = NULL;
-		g_variant_dict_lookup(&dict, "Name", "s", &name);
-		
-		// TODO
-		// It seems like a Bluetooth device should be able to have
-		// multiple "access points," but NM acts like its only one.
-		// Are the different possible access points handled in the
-		// bluetooth pairing setup? Does the bluetooth driver pick
-		// which device to use for internet? If so, maybe add in
-		// functionality to change the paired bluetooth device by
-		// talking to bluez. For now though, only one AP is necessary.
-		CskNetworkAccessPoint *ap = CSK_NETWORK_ACCESS_POINT(g_object_new(CSK_TYPE_NETWORK_ACCESS_POINT, NULL));
-		ap->device = self;
-		ap->name = name;
-		self->aps = g_list_prepend(self->aps, ap);
-		self->activeAp = ap;
-		csk_network_access_point_init(ap);
-		g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_ACTIVE_AP]);
-	}
-	
-	g_variant_unref(propsV);
 }
 
-static void cnm_device_update_type(CskNetworkDevice *self, guint32 nmType)
+// All interfaces on the device object
+static void on_nm_device_signal(GDBusConnection *connection,
+	const gchar *sender,
+	const gchar *object,
+	const gchar *interface,
+	const gchar *signal,
+	GVariant    *parameters,
+	CskNetworkDevice *self)
+{
+	if(!self->manager)
+		return;
+	if(g_strcmp0(sender, self->manager->nmDaemonOwner) != 0)
+	{
+		g_warning("Bad NM device signal: %s, %s, %s, %s, %s", self->manager->nmDaemonOwner, sender, object, interface, signal);
+		return;
+	}
+	
+	if(g_strcmp0(interface, "org.freedesktop.DBus.Properties") == 0)
+	{
+		if(g_strcmp0(signal, "PropertiesChanged") != 0)
+			return;
+		
+		DO_ON_INVALID_FORMAT_STRING(parameters, "(sa{sv}as)", return, FALSE);
+		
+		GVariant *ifaceV = g_variant_get_child_value(parameters, 0);
+		interface = g_variant_get_string(ifaceV, NULL);
+		
+		GVariant *propsV = g_variant_get_child_value(parameters, 1);
+		GVariantDict dict;
+		g_variant_dict_init(&dict, propsV);
+		
+		nm_device_update_properties(self, &dict, interface);
+		
+		g_variant_unref(ifaceV);
+		g_variant_unref(propsV);
+	}
+	else if(g_strcmp0(interface, "org.freedesktop.NetworkManager.Device.Wireless") == 0)
+	{
+		if(g_strcmp0(signal, "AccessPointAdded") == 0)
+		{
+			DO_ON_INVALID_FORMAT_STRING(parameters, "(&o)", return, FALSE);
+			const gchar *path;
+			g_variant_get(parameters, "(&o)", &path);
+			nm_device_add_wifi_ap(self, path);
+		}
+		else if(g_strcmp0(signal, "AccessPointRemoved") == 0)
+		{
+			DO_ON_INVALID_FORMAT_STRING(parameters, "(&o)", return, FALSE);
+			const gchar *path;
+			g_variant_get(parameters, "(&o)", &path);
+			nm_device_remove_wifi_ap(self, path);
+		}
+	}
+}
+
+static void nm_device_update_properties(CskNetworkDevice *self, GVariantDict *dict, const gchar *dbusiface)
+{
+	if(self->type == CSK_NDEVICE_TYPE_UNKNOWN || g_strcmp0(dbusiface, "org.freedesktop.NetworkManager.Device") == 0)
+	{
+		gchar *interface;
+		if(g_variant_dict_lookup(dict, "Interface", "s", &interface))
+		{
+			g_free(self->interface);
+			self->interface = interface;
+			manager_update_device_names(self->manager, self);
+		}
+		
+		guint32 state;
+		if(g_variant_dict_lookup(dict, "State", "u", &state))
+		{
+			if(state < 40 || state >= 110) // < NM_DEVICE_STATE_PREPARE || >= NM_DEVICE_STATE_DEACTIVATING
+				self->status = CSK_NETWORK_DISCONNECTED;
+			else if(state < 100) // < NM_DEVICE_STATE_ACTIVATED
+				self->status = CSK_NETWORK_CONNECTING;
+			else
+				self->status = CSK_NETWORK_CONNECTED;
+			g_message("state on %s: %i", self->name, state);
+				
+			if(self->status != CSK_NETWORK_DISCONNECTED
+			&& (self->type == CSK_NDEVICE_TYPE_WIRED || self->type == CSK_NDEVICE_TYPE_BLUETOOTH)
+			&& self->aps)
+				self->activeAp = self->aps->data;
+			
+			if(self->activeAp)
+			{
+				self->activeAp->status = self->status;
+				g_object_notify_by_pspec(G_OBJECT(self->activeAp), apProperties[AP_PROP_CONNECTION_STATUS]);
+			}
+			
+			if(self->ready)
+				g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_CONNECTION_STATUS]);
+			device_update_icon(self);
+		}
+		
+		// Get device type and run device-type-specific init
+		guint32 deviceType;
+		if(g_variant_dict_lookup(dict, "DeviceType", "u", &deviceType))
+			nm_device_update_type(self, deviceType);
+	}
+	else if(self->type == CSK_NDEVICE_TYPE_WIRED)
+	{
+		gchar *mac;
+		if(g_variant_dict_lookup(dict, "HwAddress", "s", &mac))
+		{
+			g_free(self->mac);
+			self->mac = mac;
+			if(self->ready)
+				g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_MAC]);
+		}
+		
+		gboolean carrier = FALSE;
+		g_variant_dict_lookup(dict, "Carrier", "b", &carrier);
+		
+		// Only create an AP if this device has the ability to connect
+		// to anything. This will be updated on the device's PropertiesChanged
+		if(carrier && !self->aps)
+		{
+			CskNetworkAccessPoint *ap = CSK_NETWORK_ACCESS_POINT(g_object_new(CSK_TYPE_NETWORK_ACCESS_POINT, NULL));
+			ap->device = self;
+			ap->name = g_strdup("ethernet");
+			ap->status = self->status;
+			self->aps = g_list_prepend(self->aps, ap);
+			if(self->status != CSK_NETWORK_DISCONNECTED)
+			{
+				self->activeAp = ap;
+				device_update_icon(self);
+			}
+			csk_network_access_point_init(ap);
+			if(self->ready)
+				g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_ACTIVE_AP]);
+		}
+		else if(!carrier && self->aps)
+		{
+			csk_network_device_remove_all_aps(self, TRUE);
+			csk_network_device_maybe_set_ready(self); // For initialization
+		}
+	}
+	else if(self->type == CSK_NDEVICE_TYPE_WIFI)
+	{
+		gchar *mac;
+		if(g_variant_dict_lookup(dict, "HwAddress", "s", &mac))
+		{
+			g_free(self->mac);
+			self->mac = mac;
+			if(self->ready)
+				g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_MAC]);
+		}
+		
+		gchar *activeAp;
+		if(g_variant_dict_lookup(dict, "ActiveAccessPoint", "o", &activeAp))
+		{
+			g_free(self->nmActiveAp);
+			self->nmActiveAp = activeAp;
+			if(self->activeAp)
+				self->activeAp->status = CSK_NETWORK_DISCONNECTED;
+			self->activeAp = NULL;
+			for(GList *it=self->readyAps; it!=NULL; it=it->next)
+				if(it->data && g_strcmp0(CSK_NETWORK_ACCESS_POINT(it->data)->nmApPath, self->nmActiveAp) == 0)
+				{
+					self->activeAp = it->data;
+					self->activeAp->status = self->status;
+					break;
+				}
+			if(self->ready)
+				g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_ACTIVE_AP]);
+			device_update_icon(self);
+		}
+	}
+	else if(self->type == CSK_NDEVICE_TYPE_BLUETOOTH)
+	{
+		gchar *mac;
+		if(g_variant_dict_lookup(dict, "HwAddress", "s", &mac))
+		{
+			g_free(self->mac);
+			self->mac = mac;
+			if(self->ready)
+				g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_MAC]);
+		}
+		
+		gchar *name;
+		if(self->aps
+		&& self->aps->data
+		&& g_variant_dict_lookup(dict, "Name", "s", &name))
+		{
+			CskNetworkAccessPoint *ap = self->aps->data;
+			g_free(ap->name);
+			ap->name = name;
+			if(self->ready && ap->ready)
+				g_object_notify_by_pspec(G_OBJECT(ap), apProperties[AP_PROP_NAME]);
+		}
+	}
+}
+
+static void nm_device_update_type(CskNetworkDevice *self, guint32 nmType)
 {
 	csk_network_device_remove_all_aps(self, TRUE);
 	
@@ -802,14 +1110,12 @@ static void cnm_device_update_type(CskNetworkDevice *self, guint32 nmType)
 	if(self->type == prevType)
 		return;
 	
-	set_device_name_and_update_others(self->manager, self);
+	manager_update_device_names(self->manager, self);
 	
+	// I don't think this will ever actually happen, but
+	// whatever, just in case
 	if(self->ready)
-	{
-		// I don't think this will ever actually happen, but
-		// whatever, just in case
 		g_object_notify_by_pspec(G_OBJECT(self), apProperties[DV_PROP_DEVICE_TYPE]);
-	}
 	
 	// Send another property request for the device-type specific
 	// properties. These go to the same generic device property handler.
@@ -877,6 +1183,7 @@ static void nm_device_remove_wifi_ap(CskNetworkDevice *self, const gchar *apPath
 			if(ap == self->activeAp)
 			{
 				self->activeAp = NULL;
+				device_update_icon(self);
 				g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_ACTIVE_AP]);
 			}
 			self->aps = g_list_delete_link(self->aps, it);
@@ -899,172 +1206,46 @@ static void csk_network_device_maybe_set_ready(CskNetworkDevice *self)
 		self->manager->readyDevices = g_list_prepend(self->manager->readyDevices, self);
 		g_signal_emit(self->manager, managerSignals[MN_SIGNAL_DEVICE_ADDED], 0, self);
 		g_message("Device ready %s", self->nmDevicePath);
+		
+		if(self->nmDevicePath && g_strcmp0(self->manager->nmPrimaryDevice, self->nmDevicePath) == 0)
+		{
+			self->manager->primaryDevice = self;
+			g_object_notify_by_pspec(G_OBJECT(self), managerProperties[MN_PROP_PRIMARY_DEVICE]);
+			manager_update_icon(self->manager);
+		}
 	}
 }
 
-// All interfaces on the device object
-static void on_nm_device_signal(GDBusConnection *connection,
-	const gchar *sender,
-	const gchar *object,
-	const gchar *interface,
-	const gchar *signal,
-	GVariant    *parameters,
-	CskNetworkDevice *self)
+static void device_update_icon(CskNetworkDevice *self)
 {
-	if(!self->manager)
-		return;
-	if(g_strcmp0(sender, self->manager->nmDaemonOwner) != 0)
+	const gchar *new = NULL;
+	
+	if(self->status == CSK_NETWORK_DISCONNECTED)
+		new = "network-offline-symbolic";
+	else if(self->status == CSK_NETWORK_CONNECTING)
 	{
-		g_warning("Bad NM device signal: %s, %s, %s, %s, %s", self->manager->nmDaemonOwner, sender, object, interface, signal);
-		return;
+		if(self->type == CSK_NDEVICE_TYPE_WIRED)
+			new = "network-wired-acquiring-symbolic";
+		else
+			new = "network-wireless-acquiring-symbolic";
+	}
+	else if(self->status == CSK_NETWORK_CONNECTED)
+	{
+		if(self->activeAp && self->activeAp->icon)
+			new = self->activeAp->icon;
+		else
+			return; // Shouldn't happen?
 	}
 	
-	if(g_strcmp0(interface, "org.freedesktop.DBus.Properties") == 0)
-	{
-		if(g_strcmp0(signal, "PropertiesChanged") != 0)
-			return;
-		
-		DO_ON_INVALID_FORMAT_STRING(parameters, "(sa{sv}as)", return, FALSE);
-		
-		const gchar *iface;
-		GVariantIter *iter;
-		g_variant_get(parameters, "(&sa{sv}as)", &iface, &iter, NULL);
-		
-		if(g_strcmp0(iface, "org.freedesktop.NetworkManager.Device.Wired") == 0)
-		{
-			const gchar *key;
-			GVariant *val;
-			while(g_variant_iter_next(iter, "{&sv}", &key, &val))
-			{
-				if(g_strcmp0(key, "HwAddress") == 0)
-				{
-					DO_ON_INVALID_FORMAT_STRING(val, "s", continue, TRUE);
-					g_free(self->mac);
-					self->mac = g_variant_dup_string(val, NULL);
-					g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_MAC]);
-				}
-				else if(g_strcmp0(key, "Carrier") == 0)
-				{
-					DO_ON_INVALID_FORMAT_STRING(val, "b", continue, TRUE);
-					gboolean carrier = g_variant_get_boolean(val);
-					// Only have an access point when the carrier (an actual cable)
-					// is attached
-					if(!carrier)
-						csk_network_device_remove_all_aps(self, TRUE);
-					else
-					{
-						CskNetworkAccessPoint *ap = CSK_NETWORK_ACCESS_POINT(g_object_new(CSK_TYPE_NETWORK_ACCESS_POINT, NULL));
-						ap->device = self;
-						ap->name = g_strdup("ethernet");
-						self->aps = g_list_prepend(self->aps, ap);
-						self->activeAp = ap;
-						csk_network_access_point_init(ap);
-					}
-				}
-				g_variant_unref(val);
-			}
-		}
-		else if(g_strcmp0(iface, "org.freedesktop.NetworkManager.Device.Wireless") == 0)
-		{
-			const gchar *key;
-			GVariant *val;
-			while(g_variant_iter_next(iter, "{&sv}", &key, &val))
-			{
-				if(g_strcmp0(key, "HwAddress") == 0)
-				{
-					DO_ON_INVALID_FORMAT_STRING(val, "s", continue, TRUE);
-					g_free(self->mac);
-					self->mac = g_variant_dup_string(val, NULL);
-					g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_MAC]);
-				}
-				else if(g_strcmp0(key, "ActiveAccessPoint") == 0)
-				{
-					DO_ON_INVALID_FORMAT_STRING(val, "o", continue, TRUE);
-					g_free(self->nmActiveAp);
-					self->nmActiveAp = g_variant_dup_string(val, NULL);
-					g_message("active ap changed: %s", self->nmActiveAp);
-					self->activeAp = NULL;
-					for(GList *it=self->readyAps; it!=NULL; it=it->next)
-						if(g_strcmp0(CSK_NETWORK_ACCESS_POINT(it->data)->nmApPath, self->nmActiveAp) == 0)
-						{
-							self->activeAp = it->data;
-							break;
-						}
-					g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_ACTIVE_AP]);
-				}
-				g_variant_unref(val);
-			}
-		}
-		else if(g_strcmp0(iface, "org.freedesktop.NetworkManager.Device.Bluetooth") == 0)
-		{
-			const gchar *key;
-			GVariant *val;
-			while(g_variant_iter_next(iter, "{&sv}", &key, &val))
-			{
-				if(g_strcmp0(key, "HwAddress") == 0)
-				{
-					DO_ON_INVALID_FORMAT_STRING(val, "s", continue, TRUE);
-					g_free(self->mac);
-					self->mac = g_variant_dup_string(val, NULL);
-					g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_MAC]);
-				}
-				else if(g_strcmp0(key, "Name") == 0)
-				{
-					DO_ON_INVALID_FORMAT_STRING(val, "s", continue, TRUE);
-					if(self->aps && self->aps->data)
-					{
-						CskNetworkAccessPoint *ap = self->aps->data;
-						g_free(ap->name);
-						ap->name = g_variant_dup_string(val, NULL);
-						g_object_notify_by_pspec(G_OBJECT(self), apProperties[AP_PROP_NAME]);
-					}
-				}
-				g_variant_unref(val);
-			}
-		}
-		else if(g_strcmp0(iface, "org.freedesktop.NetworkManager.Device") == 0)
-		{
-			const gchar *key;
-			GVariant *val;
-			// I don't know if either of these will ever actually be changed, but
-			// just in case.
-			while(g_variant_iter_next(iter, "{&sv}", &key, &val))
-			{
-				if(g_strcmp0(key, "Interface") == 0)
-				{
-					DO_ON_INVALID_FORMAT_STRING(val, "s", continue, TRUE);
-					g_free(self->interface);
-					self->interface = g_variant_dup_string(val, NULL);
-					set_device_name_and_update_others(self->manager, self);
-				}
-				else if(g_strcmp0(key, "DeviceType") == 0)
-				{
-					DO_ON_INVALID_FORMAT_STRING(val, "u", continue, TRUE);
-					guint deviceType = g_variant_get_uint32(val);
-					cnm_device_update_type(self, deviceType);
-				}
-				g_variant_unref(val);
-			}
-		}
-		g_variant_iter_free(iter);
-	}
-	else if(g_strcmp0(interface, "org.freedesktop.NetworkManager.Device.Wireless") == 0)
-	{
-		if(g_strcmp0(signal, "AccessPointAdded") == 0)
-		{
-			DO_ON_INVALID_FORMAT_STRING(parameters, "(&o)", return, FALSE);
-			const gchar *path;
-			g_variant_get(parameters, "(&o)", &path);
-			nm_device_add_wifi_ap(self, path);
-		}
-		else if(g_strcmp0(signal, "AccessPointRemoved") == 0)
-		{
-			DO_ON_INVALID_FORMAT_STRING(parameters, "(&o)", return, FALSE);
-			const gchar *path;
-			g_variant_get(parameters, "(&o)", &path);
-			nm_device_remove_wifi_ap(self, path);
-		}
-	}
+	g_message("device update icon %s, %s", new, self->icon);
+	if(g_strcmp0(new, self->icon) == 0)
+		return;
+	g_free(self->icon);
+	self->icon = g_strdup(new);
+	g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_ICON]);
+	
+	if(self->manager && self->manager->primaryDevice == self)
+		manager_update_icon(self->manager);
 }
 
 CskNDeviceType csk_network_device_get_device_type(CskNetworkDevice *self)
@@ -1082,9 +1263,19 @@ const gchar * csk_network_device_get_mac(CskNetworkDevice *self)
 	return self->mac;
 }
 
+CskNConnectionStatus csk_network_device_get_connection_status(CskNetworkDevice *self)
+{
+	return self->status;
+}
+
 GArray * csk_network_device_get_ips(CskNetworkDevice *self)
 {
 	return NULL;
+}
+
+const gchar * csk_network_device_get_icon(CskNetworkDevice *self)
+{
+	return self->icon;
 }
 
 void csk_network_device_scan(CskNetworkDevice *self)
@@ -1117,10 +1308,11 @@ static void csk_network_access_point_dispose(GObject *self_);
 static void csk_network_access_point_set_property(GObject *self_, guint propertyId, const GValue *value, GParamSpec *pspec);
 static void csk_network_access_point_get_property(GObject *self_, guint propertyId, GValue *value, GParamSpec *pspec);
 static void on_nm_wifi_ap_get_properties(GDBusConnection *connection, GAsyncResult *res, CskNetworkAccessPoint *self);
-static void csk_network_access_point_set_ready(CskNetworkAccessPoint *self);
-static void csk_network_access_point_update_best(CskNetworkAccessPoint *self);
-static void csk_network_access_point_update_icon(CskNetworkAccessPoint *self);
-static void on_nm_ap_signal(GDBusConnection *connection, const gchar *sender, const gchar *object, const gchar *interface, const gchar *signal, GVariant *parameters, CskNetworkAccessPoint *self);
+static void on_nm_wifi_ap_signal(GDBusConnection *connection, const gchar *sender, const gchar *object, const gchar *interface, const gchar *signal, GVariant *parameters, CskNetworkAccessPoint *self);
+static void nm_ap_update_properties(CskNetworkAccessPoint *self, GVariantDict *dict);
+static void ap_set_ready(CskNetworkAccessPoint *self);
+static void ap_update_best(CskNetworkAccessPoint *self);
+static void ap_update_icon(CskNetworkAccessPoint *self);
 
 static void csk_network_access_point_class_init(CskNetworkAccessPointClass *class)
 {
@@ -1211,14 +1403,14 @@ static void csk_network_access_point_init(CskNetworkAccessPoint *self)
 				self->nmApPath,
 				NULL, // All arg0s
 				G_DBUS_SIGNAL_FLAGS_NONE,
-				(GDBusSignalCallback)on_nm_ap_signal,
+				(GDBusSignalCallback)on_nm_wifi_ap_signal,
 				self,
 				NULL);
 		}
 	}
 	else
 	{
-		csk_network_access_point_set_ready(self);
+		ap_set_ready(self);
 	}
 }
 
@@ -1274,7 +1466,7 @@ static void csk_network_access_point_self_destruct(CskNetworkAccessPoint *self)
 		g_dbus_connection_signal_unsubscribe(self->device->manager->connection, self->nmSignalSubId);
 	self->nmSignalSubId = 0;
 	if(self->name && self->device)
-		csk_network_access_point_update_best(self);
+		ap_update_best(self);
 	self->device = NULL;
 }
 
@@ -1314,48 +1506,103 @@ static void on_nm_wifi_ap_get_properties(GDBusConnection *connection, GAsyncResu
 	GVariantDict dict;
 	g_variant_dict_init(&dict, propsV);
 	
-	g_clear_pointer(&self->name, g_free);
-	GVariantIter *iter;
-	if(g_variant_dict_lookup(&dict, "Ssid", "ay", &iter))
-	{
-		self->name = string_from_ay_iter(iter);
-		g_variant_iter_free(iter);
-	}
-	
-	self->strength = 0;
-	guchar strength;
-	if(g_variant_dict_lookup(&dict, "Strength", "y", &strength))
-		self->strength = strength;
-	
-	g_clear_pointer(&self->remoteMac, g_free);
-	g_variant_dict_lookup(&dict, "HwAddress", "s", &self->remoteMac);
+	nm_ap_update_properties(self, &dict);
 	
 	// Once the AP's properties have been determined, it is ready
-	csk_network_access_point_set_ready(self);
+	ap_set_ready(self);
 	g_variant_unref(propsV);
 }
 
-static void csk_network_access_point_set_ready(CskNetworkAccessPoint *self)
+// Only for org.freedesktop.DBus.Properties interface
+static void on_nm_wifi_ap_signal(GDBusConnection *connection,
+	const gchar *sender,
+	const gchar *object,
+	const gchar *interface,
+	const gchar *signal,
+	GVariant    *parameters,
+	CskNetworkAccessPoint *self)
 {
-	g_message("Ap ready: %p, %s, %s, %s, %i, %i", self, self->nmApPath, self->name, self->remoteMac, self->strength, self->best);
-	if(!self->device)
+	if(!self->device || !self->device->manager)
 		return;
-	self->device->readyAps = g_list_prepend(self->device->readyAps, self);
-	csk_network_access_point_update_best(self);
-	csk_network_access_point_update_icon(self);
+	if(g_strcmp0(sender, self->device->manager->nmDaemonOwner) != 0)
+	{
+		g_warning("Bad NM ap signal: %s, %s, %s, %s, %s", self->device->manager->nmDaemonOwner, sender, object, interface, signal);
+		return;
+	}
 	
-	if(self->device->ready)
-		g_signal_emit(self->device, deviceSignals[DV_SIGNAL_AP_ADDED], 0, self);
+	if(g_strcmp0(signal, "PropertiesChanged") == 0)
+	{
+		DO_ON_INVALID_FORMAT_STRING(parameters, "(sa{sv}as)", return, FALSE);
+		
+		GVariant *ifaceV = g_variant_get_child_value(parameters, 0);
+		interface = g_variant_get_string(ifaceV, NULL);
+		gboolean daemonIface = (g_strcmp0(interface, "org.freedesktop.NetworkManager.AccessPoint") == 0);
+		g_variant_unref(ifaceV);
+		if(!daemonIface)
+			return;
+		
+		GVariant *propsV = g_variant_get_child_value(parameters, 1);
+		GVariantDict dict;
+		g_variant_dict_init(&dict, propsV);
+		nm_ap_update_properties(self, &dict);
+		g_variant_unref(propsV);
+	}
+}
+
+static void nm_ap_update_properties(CskNetworkAccessPoint *self, GVariantDict *dict)
+{
+	GVariantIter *iter;
+	if(g_variant_dict_lookup(dict, "Ssid", "ay", &iter))
+	{
+		g_free(self->name);
+		self->name = string_from_ay_iter(iter);
+		g_variant_iter_free(iter);
+		if(self->ready)
+			g_object_notify_by_pspec(G_OBJECT(self), apProperties[AP_PROP_NAME]);
+	}
+	
+	if(g_variant_dict_lookup(dict, "Strength", "y", &self->strength))
+	{
+		if(self->ready)
+			g_object_notify_by_pspec(G_OBJECT(self), apProperties[AP_PROP_STRENGTH]);
+		ap_update_best(self);
+		ap_update_icon(self);
+	}
+	
+	gchar *mac;
+	if(g_variant_dict_lookup(dict, "HwAddress", "s", &mac))
+	{
+		g_free(self->remoteMac);
+		self->remoteMac = mac;
+		if(self->ready)
+			g_object_notify_by_pspec(G_OBJECT(self), apProperties[AP_PROP_MAC]);
+	}
+}
+
+static void ap_set_ready(CskNetworkAccessPoint *self)
+{
+	if(self->ready || !self->device)
+		return;
+	g_message("Ap ready: %p, %s, %s, %s, %i, %i", self, self->nmApPath, self->name, self->remoteMac, self->strength, self->best);
+	self->ready = TRUE;
+	self->device->readyAps = g_list_prepend(self->device->readyAps, self);
+	ap_update_best(self);
 	
 	if(self->nmApPath && g_strcmp0(self->nmApPath, self->device->nmActiveAp) == 0)
-	{
 		self->device->activeAp = self;
-		if(self->device->ready)
+	
+	ap_update_icon(self);
+	
+	if(self->device->ready)
+	{	
+		g_signal_emit(self->device, deviceSignals[DV_SIGNAL_AP_ADDED], 0, self);
+		if(self->device->activeAp == self)
 			g_object_notify_by_pspec(G_OBJECT(self->device), deviceProperties[DV_PROP_ACTIVE_AP]);
 	}
-
-	if(!self->device->ready)
+	else
+	{
 		csk_network_device_maybe_set_ready(self->device);
+	}
 }
 
 // Finds the "best" access point (based on signal strength alone) out of
@@ -1363,7 +1610,7 @@ static void csk_network_access_point_set_ready(CskNetworkAccessPoint *self)
 // Updates this value on all the other access points too, and automatically
 // emits the notify signals.
 // This is how GUI lists know which access point to show.
-static void csk_network_access_point_update_best(CskNetworkAccessPoint *self)
+static void ap_update_best(CskNetworkAccessPoint *self)
 {
 	if(!self->device)
 		return;
@@ -1414,9 +1661,9 @@ static void csk_network_access_point_update_best(CskNetworkAccessPoint *self)
 	// else, don't do anything -- best didn't change
 }
 
-static void csk_network_access_point_update_icon(CskNetworkAccessPoint *self)
+static void ap_update_icon(CskNetworkAccessPoint *self)
 {
-	if(!self->device)
+	if(!self->device || !self->device->manager)
 		return;
 	
 	if(self->device->type == CSK_NDEVICE_TYPE_WIRED)
@@ -1445,75 +1692,10 @@ static void csk_network_access_point_update_icon(CskNetworkAccessPoint *self)
 		self->icon = g_strdup_printf("network-wireless-signal-%s-symbolic", name);
 		g_object_notify_by_pspec(G_OBJECT(self), apProperties[AP_PROP_ICON]);
 	}
-}
 
-// Only for org.freedesktop.DBus.Properties interface
-static void on_nm_ap_signal(GDBusConnection *connection,
-	const gchar *sender,
-	const gchar *object,
-	const gchar *interface,
-	const gchar *signal,
-	GVariant    *parameters,
-	CskNetworkAccessPoint *self)
-{
-	if(!self->device || !self->device->manager)
-		return;
-	if(g_strcmp0(sender, self->device->manager->nmDaemonOwner) != 0)
-	{
-		g_warning("Bad NM ap signal: %s, %s, %s, %s, %s", self->device->manager->nmDaemonOwner, sender, object, interface, signal);
-		return;
-	}
-	
-	if(g_strcmp0(signal, "PropertiesChanged") == 0)
-	{
-		DO_ON_INVALID_FORMAT_STRING(parameters, "(sa{sv}as)", return, FALSE);
-		
-		const gchar *iface;
-		GVariantIter *iter;
-		//g_message("otype: %s", g_variant_get_type_string(parameters));
-		g_variant_get(parameters, "(&sa{sv}as)", &iface, &iter, NULL);
-		
-		if(g_strcmp0(iface, "org.freedesktop.NetworkManager.AccessPoint") == 0)
-		{
-			// TODO: For some reason, using get_child_value to extract
-			// the tuple wasn't working right. GVariants are weird...
-			// So until I can figure that out, using an iterator
-			// instead of a dictionary.
-			const gchar *key;
-			GVariant *val;
-			while(g_variant_iter_next(iter, "{&sv}", &key, &val))
-			{
-				if(g_strcmp0(key, "Strength") == 0)
-				{
-					DO_ON_INVALID_FORMAT_STRING(val, "y", continue, TRUE);
-					self->strength = g_variant_get_byte(val);
-					g_object_notify_by_pspec(G_OBJECT(self), apProperties[AP_PROP_STRENGTH]);
-					csk_network_access_point_update_best(self);
-					csk_network_access_point_update_icon(self);
-				}
-				else if(g_strcmp0(key, "Ssid") == 0)
-				{
-					DO_ON_INVALID_FORMAT_STRING(val, "ay", continue, TRUE);
-					GVariantIter iter;
-					g_variant_iter_init(&iter, val);
-					g_clear_pointer(&self->name, g_free);
-					self->name = string_from_ay_iter(&iter);
-				}
-				else if(g_strcmp0(key, "HwAddress") == 0)
-				{
-					// Not sure if this can actually happen; NM probably
-					// just creates a new AccessPoint object. But just in case
-					DO_ON_INVALID_FORMAT_STRING(val, "s", continue, TRUE);
-					g_clear_pointer(&self->remoteMac, g_free);
-					self->remoteMac = g_variant_dup_string(val, NULL);
-					g_object_notify_by_pspec(G_OBJECT(self), apProperties[AP_PROP_MAC]);
-				}
-				g_variant_unref(val);
-			}
-		}
-		
-		g_variant_iter_free(iter);
-	}
+	g_message("ap update icon %s", self->icon);
+	if(self->device->activeAp == self)
+		device_update_icon(self->device);
 }
 
 CskNetworkDevice * csk_network_access_point_get_device(CskNetworkAccessPoint *self)

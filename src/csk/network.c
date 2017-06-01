@@ -536,7 +536,8 @@ static void manager_update_icon(CskNetworkManager *self)
 // are of the same type. If so, update them all to contain their
 // interface name after their regular name so that users can tell
 // them apart.
-static void manager_update_device_names(CskNetworkManager *self, CskNetworkDevice *device)
+// When a device is removed (remove = TRUE), do the opposite.
+static void manager_update_device_names(CskNetworkManager *self, CskNetworkDevice *device, gboolean remove)
 {
 	if(!self)
 		return;
@@ -567,13 +568,16 @@ static void manager_update_device_names(CskNetworkManager *self, CskNetworkDevic
 			if(!interface)
 				interface = "unknown";
 			
-			other->name = g_strdup_printf("%s (%s)", name, interface);
+			if(remove)
+				other->name = g_strdup_printf("%s", name);
+			else
+				other->name = g_strdup_printf("%s (%s)", name, interface);
 			if(other->ready)
 				g_object_notify_by_pspec(G_OBJECT(other), deviceProperties[DV_PROP_NAME]);
 		}
 	}
 	
-	if(others)
+	if(others && !remove)
 		device->name = g_strdup_printf("%s (%s)", name, device->interface);
 	else
 		device->name = g_strdup(name);
@@ -797,6 +801,8 @@ static void csk_network_device_self_destruct(CskNetworkDevice *self)
 		manager_update_icon(self->manager);
 		g_object_notify_by_pspec(G_OBJECT(self->manager), managerProperties[MN_PROP_PRIMARY_DEVICE]);
 	}
+	if(self->manager)
+		manager_update_device_names(self->manager, self, TRUE);
 	csk_network_device_remove_all_aps(self, TRUE);
 	self->manager = NULL;
 }
@@ -951,7 +957,7 @@ static void nm_device_update_properties(CskNetworkDevice *self, GVariantDict *di
 		{
 			g_free(self->interface);
 			self->interface = interface;
-			manager_update_device_names(self->manager, self);
+			manager_update_device_names(self->manager, self, FALSE);
 		}
 		
 		guint32 state;
@@ -1018,7 +1024,7 @@ static void nm_device_update_properties(CskNetworkDevice *self, GVariantDict *di
 			if(self->ready)
 				g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_ACTIVE_AP]);
 		}
-		else if(!carrier && self->aps)
+		else if(!carrier)
 		{
 			csk_network_device_remove_all_aps(self, TRUE);
 			csk_network_device_maybe_set_ready(self); // For initialization
@@ -1113,7 +1119,7 @@ static void nm_device_update_type(CskNetworkDevice *self, guint32 nmType)
 	if(self->type == prevType)
 		return;
 	
-	manager_update_device_names(self->manager, self);
+	manager_update_device_names(self->manager, self, FALSE);
 	
 	// I don't think this will ever actually happen, but
 	// whatever, just in case

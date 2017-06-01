@@ -113,12 +113,15 @@ const gchar * csk_network_device_get_icon(CskNetworkDevice *device);
  * Just because a device has no assigned IP addresses does not mean
  * it is not connected to an access point.
  */
-GArray * csk_network_device_get_ips(CskNetworkDevice *device);
+//GArray * csk_network_device_get_ips(CskNetworkDevice *device);
 
 /*
- * Force a scan of access points.
+ * Force a scan of access points. Does not block.
+ * Always returns G_SOURCE_CONTINUE for convenience using this
+ * function with a timer (except returns G_SOURCE_REMOVE if the
+ * specified device is invalid).
  */
-void csk_network_device_scan(CskNetworkDevice *device);
+gboolean csk_network_device_scan(CskNetworkDevice *device);
 
 /*
  * Gets all the access points available to this device. 

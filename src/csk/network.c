@@ -1275,9 +1275,25 @@ const gchar * csk_network_device_get_icon(CskNetworkDevice *self)
 	return self->icon;
 }
 
-void csk_network_device_scan(CskNetworkDevice *self)
+gboolean csk_network_device_scan(CskNetworkDevice *self)
 {
-	// TODO
+	if(!CSK_IS_NETWORK_DEVICE(self)
+	|| !self->manager
+	|| !self->nmDevicePath
+	|| self->type != CSK_NDEVICE_TYPE_WIFI)
+		return G_SOURCE_REMOVE;
+	
+	g_dbus_connection_call(self->manager->connection,
+		NM_DAEMON_NAME,
+		self->nmDevicePath,
+		"org.freedesktop.NetworkManager.Device.Wireless",
+		"RequestScan",
+		g_variant_new("(a{sv})", NULL), // Empty options dict
+		NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL,
+		NULL,
+		NULL);
+	
+	return G_SOURCE_CONTINUE;
 }
 
 const GList * csk_network_device_get_access_points(CskNetworkDevice *self)

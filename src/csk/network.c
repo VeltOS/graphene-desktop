@@ -496,7 +496,7 @@ static void on_nm_primary_connection_get_device(GDBusConnection *connection, GAs
 		for(GList *it=self->readyDevices; it!=NULL; it=it->next)
 		{
 			CskNetworkDevice *device = it->data;
-			if(device->nmDevicePath && g_strcmp0(device->nmDevicePath, device->nmDevicePath) == 0)
+			if(device->nmDevicePath && g_strcmp0(self->nmPrimaryDevice, device->nmDevicePath) == 0)
 			{
 				g_message("primary device: %s", device->name);
 				self->primaryDevice = device;
@@ -791,15 +791,18 @@ static void csk_network_device_self_destruct(CskNetworkDevice *self)
 	if(self->nmSignalSubId && self->manager)
 		g_dbus_connection_signal_unsubscribe(self->manager->connection, self->nmSignalSubId);
 	self->nmSignalSubId = 0;
+	if(self->manager && self->manager->primaryDevice == self)
+	{
+		self->manager->primaryDevice = NULL;
+		manager_update_icon(self->manager);
+		g_object_notify_by_pspec(G_OBJECT(self->manager), managerProperties[MN_PROP_PRIMARY_DEVICE]);
+	}
 	csk_network_device_remove_all_aps(self, TRUE);
 	self->manager = NULL;
 }
 
 static void csk_network_device_remove_all_aps(CskNetworkDevice *self, gboolean emit)
 {
-	self->activeAp = NULL;
-	if(self->ready)
-		g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_ACTIVE_AP]);
 	for(GList *it=self->aps; it!=NULL; it=it->next)
 	{
 		CskNetworkAccessPoint *ap = it->data;
@@ -1180,12 +1183,6 @@ static void nm_device_remove_wifi_ap(CskNetworkDevice *self, const gchar *apPath
 		CskNetworkAccessPoint *ap = it->data;
 		if(g_strcmp0(apPath, ap->nmApPath) == 0)
 		{
-			if(ap == self->activeAp)
-			{
-				self->activeAp = NULL;
-				device_update_icon(self);
-				g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_ACTIVE_AP]);
-			}
 			self->aps = g_list_delete_link(self->aps, it);
 			self->readyAps = g_list_remove(self->readyAps, ap);
 			csk_network_access_point_self_destruct(ap);
@@ -1233,8 +1230,8 @@ static void device_update_icon(CskNetworkDevice *self)
 	{
 		if(self->activeAp && self->activeAp->icon)
 			new = self->activeAp->icon;
-		else
-			return; // Shouldn't happen?
+		else // Happens during disconnection sometimes
+			new = "network-offline-symbolic";
 	}
 	
 	g_message("device update icon %s, %s", new, self->icon);
@@ -1465,6 +1462,12 @@ static void csk_network_access_point_self_destruct(CskNetworkAccessPoint *self)
 	if(self->nmSignalSubId && self->device->manager)
 		g_dbus_connection_signal_unsubscribe(self->device->manager->connection, self->nmSignalSubId);
 	self->nmSignalSubId = 0;
+	if(self->device && self->device->activeAp == self)
+	{
+		self->device->activeAp = NULL;
+		device_update_icon(self->device);
+		g_object_notify_by_pspec(G_OBJECT(self->device), deviceProperties[DV_PROP_ACTIVE_AP]);
+	}
 	if(self->name && self->device)
 		ap_update_best(self);
 	self->device = NULL;

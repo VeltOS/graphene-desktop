@@ -5,16 +5,16 @@
  */
  
 #include "status-icons.h"
-#include "network.h"
+#include "csk/network.h"
 
 struct _GrapheneNetworkIcon
 {
 	CmkIcon parent;
-	GrapheneNetworkControl *networkControl;
+	CskNetworkManager *mn;
 };
 
 static void graphene_network_icon_dispose(GObject *self_);
-static void network_icon_on_update(GrapheneNetworkIcon *self, GrapheneNetworkControl *networkControl);
+static void network_icon_on_update(GrapheneNetworkIcon *self);
 
 G_DEFINE_TYPE(GrapheneNetworkIcon, graphene_network_icon, CMK_TYPE_ICON)
 
@@ -34,20 +34,21 @@ static void graphene_network_icon_class_init(GrapheneNetworkIconClass *class)
 
 static void graphene_network_icon_init(GrapheneNetworkIcon *self)
 {
-	self->networkControl = graphene_network_control_get_default();
-	g_signal_connect_swapped(self->networkControl, "update", G_CALLBACK(network_icon_on_update), self);
-	network_icon_on_update(self, self->networkControl);
+	self->mn = csk_network_manager_get_default();
+	g_signal_connect_swapped(self->mn, "notify::icon", G_CALLBACK(network_icon_on_update), self);
+	network_icon_on_update(self);
 }
 
 static void graphene_network_icon_dispose(GObject *self_)
 {
-	g_clear_object(&GRAPHENE_NETWORK_ICON(self_)->networkControl);
+	g_clear_object(&GRAPHENE_NETWORK_ICON(self_)->mn);
 	G_OBJECT_CLASS(graphene_network_icon_parent_class)->dispose(self_);
 }
 
-static void network_icon_on_update(GrapheneNetworkIcon *self, GrapheneNetworkControl *networkControl)
+static void network_icon_on_update(GrapheneNetworkIcon *self)
 {
-	cmk_icon_set_icon(CMK_ICON(self), graphene_network_control_get_icon_name(networkControl));
+	g_message("set icon: %s", csk_network_manager_get_icon(self->mn));
+	cmk_icon_set_icon(CMK_ICON(self), csk_network_manager_get_icon(self->mn));
 }
 
 

@@ -5,9 +5,6 @@ The material-design themed desktop environment of VeltOS, an Arch Linux-based
 operating system built entirely upon community input. Check out [velt.io](https://www.velt.io)
 for more info.
 
-Screenshot
---------
-
 ![Screenshot of VeltOS](/screenshot.png?raw=true)
 
 Installing for Arch

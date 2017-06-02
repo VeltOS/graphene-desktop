@@ -1,0 +1,3 @@
+# Github's Linguist picks up some C as C++ or Objective-C, so force it C
+*.c linguist-language=C
+*.h linguist-language=C

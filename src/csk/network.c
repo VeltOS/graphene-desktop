@@ -1296,7 +1296,7 @@ gboolean csk_network_device_scan(CskNetworkDevice *self)
 	|| !self->manager
 	|| !self->nmDevicePath
 	|| self->type != CSK_NDEVICE_TYPE_WIFI)
-		return G_SOURCE_REMOVE;
+		return G_SOURCE_CONTINUE;
 	
 	g_dbus_connection_call(self->manager->connection,
 		NM_DAEMON_NAME,

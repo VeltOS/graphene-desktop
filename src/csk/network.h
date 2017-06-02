@@ -118,8 +118,7 @@ const gchar * csk_network_device_get_icon(CskNetworkDevice *device);
 /*
  * Force a scan of access points. Does not block.
  * Always returns G_SOURCE_CONTINUE for convenience using this
- * function with a timer (except returns G_SOURCE_REMOVE if the
- * specified device is invalid).
+ * function with a timer.
  */
 gboolean csk_network_device_scan(CskNetworkDevice *device);
 

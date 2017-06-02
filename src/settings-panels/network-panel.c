@@ -19,6 +19,7 @@ struct _NDeviceGroup
 {
 	CmkWidget parent;
 	CskNetworkDevice *device;
+	ClutterActor *sep;
 	CmkLabel *label;
 	guint scanTimerId;
 };
@@ -131,11 +132,15 @@ static void on_device_added(GrapheneNetworkPanel *self, CskNetworkDevice *device
 	
 	const gchar *name = csk_network_device_get_name(device);
 	group->label = graphene_category_label_new(name);
+	group->sep = separator_new();
+
+	if(clutter_actor_get_n_children(CLUTTER_ACTOR(self)) == 0)
+		clutter_actor_hide(group->sep);
 
 	clutter_actor_set_layout_manager(CLUTTER_ACTOR(group), clutter_vertical_box_new());
 	clutter_actor_set_x_expand(CLUTTER_ACTOR(group), TRUE);
 
-	clutter_actor_add_child(CLUTTER_ACTOR(group), separator_new());
+	clutter_actor_add_child(CLUTTER_ACTOR(group), group->sep);
 	clutter_actor_add_child(CLUTTER_ACTOR(group), CLUTTER_ACTOR(group->label));
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(group));
 	
@@ -164,6 +169,12 @@ static void on_device_removed(GrapheneNetworkPanel *self, CskNetworkDevice *devi
 		if(dev == device)
 		{
 			clutter_actor_destroy(group);
+			if(i == 0)
+			{
+				NDeviceGroup *newfirst = NDEVICE_GROUP(clutter_actor_get_child_at_index(CLUTTER_ACTOR(self), 0));
+				if(newfirst)
+					clutter_actor_hide(newfirst->sep);
+			}
 			break;
 		}
 	}
@@ -179,6 +190,10 @@ static void on_primary_device_changed(GrapheneNetworkPanel *self)
 		CskNetworkDevice *dev = g_object_get_data(G_OBJECT(group), "dev");
 		if(dev == primary)
 		{
+			NDeviceGroup *prevfirst = NDEVICE_GROUP(clutter_actor_get_child_at_index(CLUTTER_ACTOR(self), 0));
+			if(prevfirst)
+				clutter_actor_show(prevfirst->sep);
+			clutter_actor_hide(NDEVICE_GROUP(group)->sep);
 			clutter_actor_set_child_below_sibling(CLUTTER_ACTOR(self), group, NULL);
 			break;
 		}

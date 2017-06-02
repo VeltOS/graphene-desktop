@@ -36,7 +36,7 @@
 #endif
 
 #ifndef GRAPHENE_DEBUG
-#define GRAPHENE_DEBUG ""
+#define GRAPHENE_DEBUG FALSE
 #endif
 
 G_DEFINE_TYPE(GrapheneWM, graphene_wm, META_TYPE_PLUGIN);
@@ -48,6 +48,9 @@ static void on_session_quit(gboolean failed, gpointer userdata);
 int main(int argc, char **argv)
 {
 	g_message("Graphene Version %s%s", GRAPHENE_VERSION_STR, GRAPHENE_DEBUG ? "d" : "");
+
+	if(GRAPHENE_DEBUG)
+		g_setenv("G_MESSAGES_DEBUG", "all", TRUE);
 	
 	meta_plugin_manager_set_plugin_type(GRAPHENE_TYPE_WM);
 	meta_set_wm_name("GRAPHENE Desktop");

@@ -4,6 +4,8 @@
  * Licensed under the Apache License 2 <www.apache.org/licenses/LICENSE-2.0>.
  */
 
+#define G_LOG_DOMAIN "CskNetwork"
+
 #include "network.h"
 #include <gio/gio.h>
 
@@ -257,7 +259,7 @@ static gboolean multiple_network_daemons_available(CskNetworkManager *self)
 
 static void on_nm_daemon_appeared(GDBusConnection *connection, const gchar *name, const gchar *owner, CskNetworkManager *self)
 {
-	g_message("nm daemon appeared");
+	g_debug("nm daemon appeared");
 	csk_network_manager_remove_all_devices(self, TRUE);
 	
 	// Connect to the daemon and get signals from everything the daemon
@@ -414,7 +416,7 @@ static void add_nm_device(CskNetworkManager *self, const gchar *devicePath)
 		if(g_strcmp0(devicePath, CSK_NETWORK_DEVICE(it->data)->nmDevicePath) == 0)
 			return;
 	
-	g_message("Add device: %s", devicePath);
+	g_debug("Add device: %s", devicePath);
 	CskNetworkDevice *device = CSK_NETWORK_DEVICE(g_object_new(CSK_TYPE_NETWORK_DEVICE, NULL));
 	device->manager = self;
 	device->nmDevicePath = g_strdup(devicePath);
@@ -432,7 +434,7 @@ static void add_nm_device(CskNetworkManager *self, const gchar *devicePath)
 
 static void remove_nm_device(CskNetworkManager *self, const gchar *devicePath)
 {
-	g_message("Remove device: %s", devicePath);
+	g_debug("Remove device: %s", devicePath);
 	for(GList *it=self->devices; it!=NULL; it=it->next)
 	{
 		CskNetworkDevice *device = it->data;
@@ -491,14 +493,14 @@ static void on_nm_primary_connection_get_device(GDBusConnection *connection, GAs
 	if(g_variant_n_children(props) > 0)
 	{
 		g_variant_get_child(props, 0, "o", &self->nmPrimaryDevice);
-		g_message("get primary device: %s", self->nmPrimaryDevice);
+		g_debug("get primary device: %s", self->nmPrimaryDevice);
 		
 		for(GList *it=self->readyDevices; it!=NULL; it=it->next)
 		{
 			CskNetworkDevice *device = it->data;
 			if(device->nmDevicePath && g_strcmp0(self->nmPrimaryDevice, device->nmDevicePath) == 0)
 			{
-				g_message("primary device: %s", device->name);
+				g_debug("primary device: %s", device->name);
 				self->primaryDevice = device;
 				break;
 			}
@@ -524,7 +526,7 @@ static void manager_update_icon(CskNetworkManager *self)
 	else
 		new = "network-offline-symbolic";
 	
-	g_message("manager update icon %s", new);
+	g_debug("manager update icon %s", new);
 	if(g_strcmp0(new, self->icon) == 0)
 		return;
 	g_free(self->icon);
@@ -726,7 +728,7 @@ static void csk_network_device_init(CskNetworkDevice *self)
 	if(!CSK_IS_NETWORK_MANAGER(self->manager))
 		return;
 	
-	g_message("Device init %s", self->nmDevicePath);
+	g_debug("Device init %s", self->nmDevicePath);
 	self->cancellable = g_cancellable_new();
 	
 	device_update_icon(self);
@@ -971,7 +973,7 @@ static void nm_device_update_properties(CskNetworkDevice *self, GVariantDict *di
 				self->status = CSK_NETWORK_CONNECTING;
 			else
 				self->status = CSK_NETWORK_CONNECTED;
-			g_message("state on %s: %i", self->name, state);
+			g_debug("state on %s: %i", self->name, state);
 			
 			if(self->status != prev)
 			{
@@ -1119,7 +1121,7 @@ static void nm_device_update_type(CskNetworkDevice *self, guint32 nmType)
 	else
 	{
 		self->type = CSK_NDEVICE_TYPE_UNKNOWN;
-		g_message("Unsupported NetworkManager Device type: %i", (int)nmType);
+		g_debug("Unsupported NetworkManager Device type: %i", (int)nmType);
 		return;
 	}
 
@@ -1214,7 +1216,7 @@ static void csk_network_device_maybe_set_ready(CskNetworkDevice *self)
 	{
 		self->ready = TRUE;
 		self->manager->readyDevices = g_list_prepend(self->manager->readyDevices, self);
-		g_message("Device ready %s", self->nmDevicePath);
+		g_debug("Device ready %s", self->nmDevicePath);
 		g_signal_emit(self->manager, managerSignals[MN_SIGNAL_DEVICE_ADDED], 0, self);
 		
 		if(self->nmDevicePath && g_strcmp0(self->manager->nmPrimaryDevice, self->nmDevicePath) == 0)
@@ -1247,7 +1249,7 @@ static void device_update_icon(CskNetworkDevice *self)
 			new = "network-offline-symbolic";
 	}
 	
-	g_message("device update icon %s, %s", new, self->icon);
+	g_debug("device update icon %s, %s", new, self->icon);
 	if(g_strcmp0(new, self->icon) == 0)
 		return;
 	g_free(self->icon);
@@ -1443,7 +1445,7 @@ static void csk_network_access_point_init(CskNetworkAccessPoint *self)
 static void csk_network_access_point_dispose(GObject *self_)
 {
 	CskNetworkAccessPoint *self = CSK_NETWORK_ACCESS_POINT(self_);
-	g_message("ap dispose: %s", self->name);
+	g_debug("ap dispose: %s", self->name);
 	csk_network_access_point_self_destruct(self);
 	g_clear_pointer(&self->name, g_free);
 	G_OBJECT_CLASS(csk_network_access_point_parent_class)->dispose(self_);
@@ -1482,7 +1484,7 @@ static void csk_network_access_point_get_property(GObject *self_, guint property
 
 static void csk_network_access_point_self_destruct(CskNetworkAccessPoint *self)
 {
-	g_message("Ap self destruct: %s, %s", self->name, self->nmApPath);
+	g_debug("Ap self destruct: %s, %s", self->name, self->nmApPath);
 	self->strength = 0;
 	g_clear_pointer(&self->remoteMac, g_free);
 	g_clear_pointer(&self->nmApPath, g_free);
@@ -1615,7 +1617,7 @@ static void ap_set_ready(CskNetworkAccessPoint *self)
 {
 	if(self->ready || !self->device)
 		return;
-	g_message("Ap ready: %p, %s, %s, %s, %i, %i", self, self->nmApPath, self->name, self->remoteMac, self->strength, self->best);
+	g_debug("Ap ready: %p, %s, %s, %s, %i, %i", self, self->nmApPath, self->name, self->remoteMac, self->strength, self->best);
 	self->ready = TRUE;
 	self->device->readyAps = g_list_prepend(self->device->readyAps, self);
 	ap_update_best(self);
@@ -1648,7 +1650,7 @@ static void ap_update_best(CskNetworkAccessPoint *self)
 {
 	if(!self->device)
 		return;
-	g_message("update best");
+	g_debug("update best");
 	guint strength = self->strength;
 	CskNetworkAccessPoint *prevBest = self->best ? self : NULL;
 	CskNetworkAccessPoint *best = self;
@@ -1727,7 +1729,7 @@ static void ap_update_icon(CskNetworkAccessPoint *self)
 		g_object_notify_by_pspec(G_OBJECT(self), apProperties[AP_PROP_ICON]);
 	}
 
-	g_message("ap update icon %s", self->icon);
+	g_debug("ap update icon %s", self->icon);
 	if(self->device->activeAp == self)
 		device_update_icon(self->device);
 }

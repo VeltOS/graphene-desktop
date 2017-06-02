@@ -963,6 +963,8 @@ static void nm_device_update_properties(CskNetworkDevice *self, GVariantDict *di
 		guint32 state;
 		if(g_variant_dict_lookup(dict, "State", "u", &state))
 		{
+			CskNConnectionStatus prev = self->status;
+			
 			if(state < 40 || state >= 110) // < NM_DEVICE_STATE_PREPARE || >= NM_DEVICE_STATE_DEACTIVATING
 				self->status = CSK_NETWORK_DISCONNECTED;
 			else if(state < 100) // < NM_DEVICE_STATE_ACTIVATED
@@ -970,21 +972,26 @@ static void nm_device_update_properties(CskNetworkDevice *self, GVariantDict *di
 			else
 				self->status = CSK_NETWORK_CONNECTED;
 			g_message("state on %s: %i", self->name, state);
-				
-			if(self->status != CSK_NETWORK_DISCONNECTED
-			&& (self->type == CSK_NDEVICE_TYPE_WIRED || self->type == CSK_NDEVICE_TYPE_BLUETOOTH)
-			&& self->aps)
-				self->activeAp = self->aps->data;
 			
-			if(self->activeAp)
+			if(self->status != prev)
 			{
-				self->activeAp->status = self->status;
-				g_object_notify_by_pspec(G_OBJECT(self->activeAp), apProperties[AP_PROP_CONNECTION_STATUS]);
+				if((self->type == CSK_NDEVICE_TYPE_WIRED || self->type == CSK_NDEVICE_TYPE_BLUETOOTH))
+				{
+					self->activeAp = (self->aps && self->status != CSK_NETWORK_DISCONNECTED) ? self->aps->data : NULL;
+					if(self->ready)
+						g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_ACTIVE_AP]);
+				}
+				
+				if(self->activeAp)
+				{
+					self->activeAp->status = self->status;
+					g_object_notify_by_pspec(G_OBJECT(self->activeAp), apProperties[AP_PROP_CONNECTION_STATUS]);
+				}
+				
+				if(self->ready)
+					g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_CONNECTION_STATUS]);
+				device_update_icon(self);
 			}
-			
-			if(self->ready)
-				g_object_notify_by_pspec(G_OBJECT(self), deviceProperties[DV_PROP_CONNECTION_STATUS]);
-			device_update_icon(self);
 		}
 		
 		// Get device type and run device-type-specific init
@@ -1207,8 +1214,8 @@ static void csk_network_device_maybe_set_ready(CskNetworkDevice *self)
 	{
 		self->ready = TRUE;
 		self->manager->readyDevices = g_list_prepend(self->manager->readyDevices, self);
-		g_signal_emit(self->manager, managerSignals[MN_SIGNAL_DEVICE_ADDED], 0, self);
 		g_message("Device ready %s", self->nmDevicePath);
+		g_signal_emit(self->manager, managerSignals[MN_SIGNAL_DEVICE_ADDED], 0, self);
 		
 		if(self->nmDevicePath && g_strcmp0(self->manager->nmPrimaryDevice, self->nmDevicePath) == 0)
 		{
@@ -1615,13 +1622,15 @@ static void ap_set_ready(CskNetworkAccessPoint *self)
 	
 	if(self->nmApPath && g_strcmp0(self->nmApPath, self->device->nmActiveAp) == 0)
 		self->device->activeAp = self;
+	else if(self->device->type != CSK_NDEVICE_TYPE_WIFI && self->device->status != CSK_NETWORK_DISCONNECTED)
+		self->device->activeAp = self;
 	
 	ap_update_icon(self);
 	
 	if(self->device->ready)
 	{	
 		g_signal_emit(self->device, deviceSignals[DV_SIGNAL_AP_ADDED], 0, self);
-		if(self->device->activeAp == self)
+		if(self->device->activeAp == self) // Set a few lines above
 			g_object_notify_by_pspec(G_OBJECT(self->device), deviceProperties[DV_PROP_ACTIVE_AP]);
 	}
 	else

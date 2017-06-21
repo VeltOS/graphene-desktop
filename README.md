@@ -11,7 +11,7 @@ Installing for Arch
 --------
 
 If you are running Arch Linux, you can install Graphene Desktop by adding
-*cdn.velt.io/vosrepo/$arch* to your list of repositories and installing the
+*repo.velt.io/$arch* to your list of repositories and installing the
 package *graphene-desktop* via pacman. [Click here for more detail.](https://velt.io/veltos-installation/)
 
 Building Manually

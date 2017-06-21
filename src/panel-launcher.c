@@ -120,6 +120,12 @@ static void graphene_launcher_popup_dispose(GObject *self_)
 	GrapheneLauncherPopup *self = GRAPHENE_LAUNCHER_POPUP(self_);
 	g_clear_object(&self->appTree);
 	g_clear_pointer(&self->filter, g_free);
+
+	// Destroying the popup does destroy the scroll window already,
+	// but for whatever reason it causes a lot of lag. Destroying it
+	// here removes the lag. TODO: Why??
+	g_clear_pointer(&self->scroll, clutter_actor_destroy);
+
 	G_OBJECT_CLASS(graphene_launcher_popup_parent_class)->dispose(self_);
 }
 
@@ -196,12 +202,26 @@ static void on_search_box_activate(GrapheneLauncherPopup *self, ClutterText *sea
 	g_signal_emit_by_name(self->firstApp, "activate");
 }
 
+#include <sys/time.h>
+static double getms()
+{
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	unsigned long us = 1000000 * tv.tv_sec + tv.tv_usec;
+	return us / 1000.0;
+}
+
 static void popup_applist_refresh(GrapheneLauncherPopup *self)
 {
-	// TODO: This lags the entire WM. Do it not synced, also cache it
+	// This causes some lag on first open, but it dramatically
+	// reduces afterwards. It might have some internal cache?
 	gmenu_tree_load_sync(self->appTree, NULL);
 
+	double a = getms();
 	popup_applist_populate(self);
+	double b = getms();
+	double d = b - a;
+	g_message("Launch time: %fms", d);
 }
 
 static void popup_applist_populate(GrapheneLauncherPopup *self)
@@ -209,7 +229,8 @@ static void popup_applist_populate(GrapheneLauncherPopup *self)
 	clutter_actor_destroy_all_children(CLUTTER_ACTOR(self->scroll));
 	self->firstApp = NULL;
 	GMenuTreeDirectory *directory = gmenu_tree_get_root_directory(self->appTree);
-	popup_applist_populate_directory(self, directory);
+	guint x = popup_applist_populate_directory(self, directory);
+	g_message("num items: %i", x);
 	gmenu_tree_item_unref(directory);
 }
 
@@ -283,6 +304,7 @@ static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenu
 			clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), CLUTTER_ACTOR(label));
 
 			guint subcount = popup_applist_populate_directory(self, directory);
+			count += subcount;
 			gmenu_tree_item_unref(directory);
 
 			if(subcount == 0)

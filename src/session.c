@@ -41,7 +41,7 @@
 #define SESSION_DBUS_NAME "org.gnome.SessionManager"
 #define SESSION_DBUS_PATH "/org/gnome/SessionManager"
 #define POLKIT_AUTH_AGENT_DBUS_PATH "/io/velt/PolicyKit1/AuthenticationAgent"
-#define SHOW_ALL_OUTPUT TRUE // Set to TRUE for release; FALSE only shows output from .desktop files with 'Graphene-ShowOutput=true'
+#define SHOW_ALL_OUTPUT FALSE // Set to TRUE for release; FALSE only shows output from .desktop files with 'Graphene-ShowOutput=true'
 
 // Generated name is a bit too long...
 typedef DBusOrgFreedesktopPolicyKit1AuthenticationAgent DBusPolkitAuthAgent; 

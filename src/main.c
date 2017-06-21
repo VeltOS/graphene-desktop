@@ -30,6 +30,7 @@
 #include <glib-unix.h>
 #include "session.h"
 #include "wm.h"
+#include <stdio.h>
 
 #ifndef GRAPHENE_VERSION_STR
 #define GRAPHENE_VERSION_STR ""
@@ -47,10 +48,33 @@ static void on_session_quit(gboolean failed, gpointer userdata);
 
 int main(int argc, char **argv)
 {
+#if GRAPHENE_DEBUG
+	g_setenv("G_MESSAGES_DEBUG", "all", TRUE);
+	const gchar *home = g_getenv("HOME");
+	gchar *out = g_strdup_printf("%s/graphene.log", home);
+	int f = open(out, O_WRONLY | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR);
+	g_free(out);
+	dup2(f, 1); // stdout -> f
+	dup2(f, 2); // stderr -> f
+	setvbuf(stdout, NULL, _IOLBF, 0); // Set stdout/err to line-buffered. This
+	setvbuf(stderr, NULL, _IOLBF, 0); // affects libc calls (printf,fwrite,etc).
+#endif
+	
+	fprintf(stderr, "\n"); // g_message uses stderr by default
 	g_message("Graphene Version %s%s", GRAPHENE_VERSION_STR, GRAPHENE_DEBUG ? "d" : "");
-
-	if(GRAPHENE_DEBUG)
-		g_setenv("G_MESSAGES_DEBUG", "all", TRUE);
+	
+#if GRAPHENE_DEBUG
+	// Print date and time
+	GDateTime *dt = g_date_time_new_now_local();
+	gchar *fdt = g_date_time_format(dt, "%G-%m-%e T%H:%M:%S Z%z");
+	g_message("%s\n", fdt);
+	g_free(fdt);
+	g_date_time_unref(dt);
+	
+	// Make sure initial log messages get written
+	fflush(stderr); 
+	fsync(fileno(stderr));
+#endif
 	
 	meta_plugin_manager_set_plugin_type(GRAPHENE_TYPE_WM);
 	meta_set_wm_name("GRAPHENE Desktop");

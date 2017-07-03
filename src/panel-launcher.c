@@ -25,9 +25,9 @@ struct _GrapheneLauncherPopup
 	CmkButton *firstApp;
 	gdouble scrollAmount;
 	
-	ClutterText *searchBox;
+	CmkLabel *searchBox;
 	CmkIcon *searchIcon;
-	ClutterActor *searchSeparator;
+	CmkWidget *searchSeparator;
 	gchar *filter;
 	
 	GMenuTree *appTree;
@@ -39,8 +39,7 @@ G_DEFINE_TYPE(GrapheneLauncherPopup, graphene_launcher_popup, CMK_TYPE_WIDGET)
 
 static void graphene_launcher_popup_dispose(GObject *self_);
 static void graphene_launcher_popup_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags);
-static void on_style_changed(CmkWidget *self_);
-static void on_background_changed(CmkWidget *self_);
+static void on_styles_changed(CmkWidget *self_, guint flags);
 static void on_search_box_text_changed(GrapheneLauncherPopup *self, ClutterText *searchBox);
 static void on_search_box_activate(GrapheneLauncherPopup *self, ClutterText *searchBox);
 static void popup_applist_refresh(GrapheneLauncherPopup *self);
@@ -61,8 +60,7 @@ static void graphene_launcher_popup_class_init(GrapheneLauncherPopupClass *class
 	G_OBJECT_CLASS(class)->dispose = graphene_launcher_popup_dispose;
 	CLUTTER_ACTOR_CLASS(class)->allocate = graphene_launcher_popup_allocate;
 	CLUTTER_ACTOR_CLASS(class)->key_press_event = on_key_pressed;
-	CMK_WIDGET_CLASS(class)->style_changed = on_style_changed;
-	CMK_WIDGET_CLASS(class)->background_changed = on_background_changed;
+	CMK_WIDGET_CLASS(class)->styles_changed = on_styles_changed;
 }
 
 static void graphene_launcher_popup_init(GrapheneLauncherPopup *self)
@@ -72,22 +70,25 @@ static void graphene_launcher_popup_init(GrapheneLauncherPopup *self)
 
 	self->window = cmk_widget_new();
 	cmk_widget_set_draw_background_color(self->window, TRUE);
-	cmk_widget_set_background_color_name(self->window, "background");
+	cmk_widget_set_background_color(self->window, "background");
+	clutter_actor_set_reactive(CLUTTER_ACTOR(self->window), TRUE);
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->window));
 
 	// TODO: Search bar not tabbable because not a CmkWidget
-	self->searchBox = CLUTTER_TEXT(clutter_text_new());
-	clutter_text_set_editable(self->searchBox, TRUE);
-	clutter_text_set_activatable(self->searchBox, TRUE);
-	clutter_text_set_single_line_mode(self->searchBox, TRUE);
-	clutter_actor_set_reactive(CLUTTER_ACTOR(self->searchBox), TRUE);
-	g_signal_connect_swapped(self->searchBox, "text-changed", G_CALLBACK(on_search_box_text_changed), self);
-	g_signal_connect_swapped(self->searchBox, "activate", G_CALLBACK(on_search_box_activate), self);
+	self->searchBox = cmk_label_new();
+	cmk_label_set_font_size_pt(self->searchBox, 16);
+	ClutterText *searchBoxBase = cmk_label_get_clutter_text(self->searchBox);
+	clutter_text_set_editable(searchBoxBase, TRUE);
+	clutter_text_set_activatable(searchBoxBase, TRUE);
+	clutter_text_set_single_line_mode(searchBoxBase, TRUE);
+	clutter_actor_set_reactive(CLUTTER_ACTOR(searchBoxBase), TRUE);
+	g_signal_connect_swapped(searchBoxBase, "text-changed", G_CALLBACK(on_search_box_text_changed), self);
+	g_signal_connect_swapped(searchBoxBase, "activate", G_CALLBACK(on_search_box_activate), self);
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->searchBox));
 	//cmk_redirect_keyboard_focus(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->searchBox));
 
-	self->searchSeparator = separator_new();
-	clutter_actor_add_child(CLUTTER_ACTOR(self), self->searchSeparator);
+	self->searchSeparator = cmk_separator_new_h();
+	cmk_widget_add_child(CMK_WIDGET(self), self->searchSeparator);
 
 	// Despite the scroll box looking like its inside the popup window, it
 	// isn't actually a child of the window actor; it is a child of self.
@@ -104,11 +105,6 @@ static void graphene_launcher_popup_init(GrapheneLauncherPopup *self)
 	clutter_actor_set_x_align(CLUTTER_ACTOR(self->searchIcon), CLUTTER_ACTOR_ALIGN_CENTER);
 	clutter_actor_set_y_align(CLUTTER_ACTOR(self->searchIcon), CLUTTER_ACTOR_ALIGN_CENTER);
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->searchIcon));
-
-	PangoFontDescription *desc = pango_font_description_new();
-	pango_font_description_set_size(desc, 16*PANGO_SCALE); // 16pt
-	clutter_text_set_font_description(self->searchBox, desc);
-	pango_font_description_free(desc);
 
 	// Load applications
 	self->appTree = gmenu_tree_new("gnome-applications.menu", GMENU_TREE_FLAGS_SORT_DISPLAY_NAME);
@@ -132,10 +128,12 @@ static void graphene_launcher_popup_dispose(GObject *self_)
 static void graphene_launcher_popup_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags)
 {
 	GrapheneLauncherPopup *self = GRAPHENE_LAUNCHER_POPUP(self_);
+
+	float sDepth = CMK_DP(self_, 20);
 	
-	gfloat width = LAUNCHER_WIDTH * cmk_widget_style_get_scale_factor(CMK_WIDGET(self_));
+	gfloat width = CMK_DP(self_, LAUNCHER_WIDTH);
 	ClutterActorBox windowBox = {box->x1, box->y1, MIN(box->x1 + width, box->x2/2), box->y2};
-	ClutterActorBox sdcBox = {box->x1-40, box->y1-40, windowBox.x2 + 40, box->y2 + 40};
+	ClutterActorBox sdcBox = {box->x1-sDepth, box->y1-sDepth, windowBox.x2 + sDepth, box->y2 + sDepth};
 
 	// I'm so sorry for how ugly this icon/searchbar allocation is.
 	// Eventually I'll move the search icon and the input box into its
@@ -160,25 +158,24 @@ static void graphene_launcher_popup_allocate(ClutterActor *self_, const ClutterA
 	CLUTTER_ACTOR_CLASS(graphene_launcher_popup_parent_class)->allocate(self_, box, flags);
 }
 
-static void on_style_changed(CmkWidget *self_)
+static void on_styles_changed(CmkWidget *self_, guint flags)
 {
+	CMK_WIDGET_CLASS(graphene_launcher_popup_parent_class)->styles_changed(self_, flags);
 	GrapheneLauncherPopup *self = GRAPHENE_LAUNCHER_POPUP(self_);
+	//if((flags & CMK_STYLE_FLAG_COLORS)
+	//|| (flags & CMK_STYLE_FLAG_BACKGROUND_NAME))
+	//{
+	//	const ClutterColor *color =
+	//		cmk_widget_get_foreground_clutter_color(self_);
+	//	clutter_text_set_color(self->searchBox, color);
+	//}
 
-	float padding = cmk_widget_style_get_padding(self_)/2;
+	// TODO: Make these actors into Cmk widgets
+	float padding = CMK_DP(self_, 5) * cmk_widget_get_padding_multiplier(self_);
 	ClutterMargin margin = {padding, padding, padding, padding};
 	ClutterMargin margin2 = {padding, 0, 0, 0};
 	clutter_actor_set_margin(CLUTTER_ACTOR(self->searchBox), &margin);
 	clutter_actor_set_margin(CLUTTER_ACTOR(self->searchIcon), &margin2);
-
-	clutter_actor_queue_relayout(CLUTTER_ACTOR(self_));
-	CMK_WIDGET_CLASS(graphene_launcher_popup_parent_class)->style_changed(self_);
-}
-
-static void on_background_changed(CmkWidget *self_)
-{
-	const ClutterColor *color = cmk_widget_get_foreground_color(self_);
-	clutter_text_set_color(GRAPHENE_LAUNCHER_POPUP(self_)->searchBox, color);
-	CMK_WIDGET_CLASS(graphene_launcher_popup_parent_class)->background_changed(self_);
 }
 
 static void on_search_box_text_changed(GrapheneLauncherPopup *self, ClutterText *searchBox)
@@ -256,7 +253,6 @@ static gboolean add_app(GrapheneLauncherPopup *self, GDesktopAppInfo *appInfo)
 		const gchar * const * names = g_themed_icon_get_names(G_THEMED_ICON(gicon));
 		iconName = names[0];
 	}
-
 	CmkIcon *icon = cmk_icon_new_from_name(iconName ? iconName : "open-menu-symbolic", 24);
 	cmk_button_set_content(button, CMK_WIDGET(icon));
 	cmk_button_set_text(button, g_app_info_get_display_name(G_APP_INFO(appInfo)));
@@ -296,9 +292,9 @@ static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenu
 		{
 			GMenuTreeDirectory *directory = gmenu_tree_iter_get_directory(it);
 	
-			ClutterActor *sep = NULL;
+			CmkWidget *sep = NULL;
 			if(!firstItem)
-				clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), (sep = separator_new()));
+				cmk_widget_add_child(CMK_WIDGET(self->scroll), (sep = cmk_separator_new_h()));
 			
 			CmkLabel *label = graphene_category_label_new(gmenu_tree_directory_get_name(directory));
 			clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), CLUTTER_ACTOR(label));
@@ -311,7 +307,7 @@ static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenu
 			{
 				clutter_actor_destroy(CLUTTER_ACTOR(label));
 				if(sep)
-					clutter_actor_destroy(sep);
+					cmk_widget_destroy(sep);
 			}
 			else
 			{
@@ -338,7 +334,7 @@ static gboolean on_key_pressed(ClutterActor *self, ClutterKeyEvent *event)
 {
 	if(event->keyval == CLUTTER_KEY_Tab || event->unicode_value == 0)
 		return CLUTTER_EVENT_PROPAGATE;
-	ClutterActor *bar = CLUTTER_ACTOR(GRAPHENE_LAUNCHER_POPUP(self)->searchBox);
+	ClutterActor *bar = CLUTTER_ACTOR(cmk_label_get_clutter_text(GRAPHENE_LAUNCHER_POPUP(self)->searchBox));
 	clutter_actor_grab_key_focus(bar);
 	clutter_actor_event(bar, (ClutterEvent *)event, FALSE);
 	return CLUTTER_EVENT_STOP;

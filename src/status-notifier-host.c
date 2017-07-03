@@ -355,8 +355,7 @@ static void item_update_icon_try_pixmap(GDBusConnection *connection, GAsyncResul
 		if(iconPixmapVariant && g_variant_is_of_type(iconPixmapVariant, G_VARIANT_TYPE("a(iiay)")))
 		{
 			guint size, frames;
-			gfloat scale = cmk_widget_style_get_scale_factor(CMK_WIDGET(item->icon));
-			guchar *anim = icon_variant_array_to_best_icon(iconPixmapVariant, 24*scale, &size, &frames);
+			guchar *anim = icon_variant_array_to_best_icon(iconPixmapVariant, CMK_DP(item->icon, 24), &size, &frames);
 
 			if(anim)
 			{

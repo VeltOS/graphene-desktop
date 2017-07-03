@@ -104,6 +104,8 @@ const MetaPluginInfo * graphene_wm_plugin_info(MetaPlugin *plugin)
 static gint requestedDPI = 1024 * 96;
 static gfloat requestedDPIScale = 1.0;
 
+CmkWidget *style = NULL;
+
 //#include <math.h>
 //static gboolean sizewarp()
 //{
@@ -111,8 +113,7 @@ static gfloat requestedDPIScale = 1.0;
 //	t += 0.05;
 //	requestedDPIScale = 4 * fabs(sin(t));
 //	
-//	CmkWidget *style = cmk_widget_get_style_default();
-//	cmk_widget_style_set_scale_factor(style, requestedDPIScale);
+//	cmk_widget_set_dp_scale(style, requestedDPIScale);
 //	//g_object_set(clutter_settings_get_default(), "font-dpi", (gint)(requestedDPI * requestedDPIScale), NULL);
 //	
 //	return G_SOURCE_CONTINUE;
@@ -121,11 +122,11 @@ static gfloat requestedDPIScale = 1.0;
 void graphene_wm_start(MetaPlugin *self_)
 {
 	// Some stuff for DPI scaling
-	CmkWidget *style = cmk_widget_get_style_default();
+	style = cmk_widget_new();
 	CmkIconLoader *iconLoader = cmk_icon_loader_get_default();
 
 	requestedDPIScale = cmk_icon_loader_get_scale(iconLoader);
-	cmk_widget_style_set_scale_factor(style, requestedDPIScale);
+	cmk_widget_set_dp_scale(style, requestedDPIScale);
 	g_object_set(clutter_settings_get_default(), "font-dpi", (gint)(requestedDPI * requestedDPIScale), NULL);
 	g_signal_connect_after(clutter_get_default_backend(), "resolution-changed", G_CALLBACK(reset_clutter_dpi), NULL);
 	g_signal_connect(iconLoader, "notify::scale", G_CALLBACK(on_global_scale_changed), NULL);
@@ -153,12 +154,10 @@ void graphene_wm_start(MetaPlugin *self_)
 	// TODO: Load styling from a file
 	// cmk_stlye_get_default gets a new ref here, which we never release to
 	// ensure all widgets get the same default style.
-	cmk_widget_style_set_color(style, "background", &GrapheneColors[0]);
-	cmk_widget_style_set_color(style, "foreground", &GrapheneColors[1]);
-	cmk_widget_style_set_color(style, "hover", &GrapheneColors[2]);
-	cmk_widget_style_set_color(style, "selected", &GrapheneColors[3]);
-	cmk_widget_style_set_bevel_radius(style, GrapheneBevelRadius);
-	cmk_widget_style_set_padding(style, GraphenePadding);
+	cmk_widget_set_named_color(style, "background", &GrapheneColors[0]);
+	cmk_widget_set_named_color(style, "foreground", &GrapheneColors[1]);
+	cmk_widget_set_named_color(style, "hover", &GrapheneColors[2]);
+	cmk_widget_set_named_color(style, "selected", &GrapheneColors[3]);
 
 	// Background is always below all other actors
 	ClutterActor *backgroundGroup = meta_background_group_new();
@@ -169,10 +168,12 @@ void graphene_wm_start(MetaPlugin *self_)
 
 	// Notifications go lowest of all widgets (but above windows)
 	self->notificationBox = graphene_notification_box_new((NotificationAddedCb)xfixes_add_input_actor, self);
+	cmk_widget_set_style_parent(CMK_WIDGET(self->notificationBox), style);
 	clutter_actor_insert_child_above(self->stage, ACTOR(self->notificationBox), NULL);
 
 	// Panel is 2nd lowest
 	self->panel = graphene_panel_new((CPanelModalCallback)on_panel_request_modal, wm_request_logout, self);
+	cmk_widget_set_style_parent(CMK_WIDGET(self->panel), style);
 	ClutterActor *panelBar = graphene_panel_get_input_actor(self->panel);
 	xfixes_add_input_actor(self, panelBar);
 	clutter_actor_insert_child_above(self->stage, ACTOR(self->panel), NULL);
@@ -204,6 +205,14 @@ void graphene_wm_start(MetaPlugin *self_)
 	//clutter_actor_hide(self->coverGroup);
 	clutter_actor_show(self->coverGroup);
 	graphene_wm_begin_modal(self);
+
+	// TODO: "Unredirection" is the WM's feature of painting fullscreen windows
+	// directly to the screen without compositing. This is good for speed, but
+	// means that things like the volume bar won't get shown over fullscreen
+	// windows. So whenever the volume bar needs to be shown, and a window is
+	// in fullscreen, temporarily disable unredirection (but also be sure to
+	// hide the task bar). This also applies to notifications and cover group.
+	//meta_disable_unredirect_for_screen(screen);
 }
 
 static void on_monitors_changed(MetaScreen *screen, GrapheneWM *self)
@@ -277,10 +286,8 @@ static void reset_clutter_dpi()
 
 static void on_global_scale_changed(CmkIconLoader *iconLoader)
 {
-	CmkWidget *style = cmk_widget_get_style_default();
 	requestedDPIScale = cmk_icon_loader_get_scale(iconLoader);
-	cmk_widget_style_set_scale_factor(style, requestedDPIScale);
-	g_object_unref(style);
+	cmk_widget_set_dp_scale(style, requestedDPIScale);
 	g_object_set(clutter_settings_get_default(), "font-dpi", (gint)(requestedDPI * requestedDPIScale), NULL);
 }
 
@@ -621,6 +628,8 @@ void graphene_wm_show_dialog(GrapheneWM *self, ClutterActor *dialog)
 	
 	if(!dialog)
 		return;
+	
+	cmk_widget_set_style_parent(CMK_WIDGET(dialog), style);
 
 	CmkShadow *shadow = cmk_shadow_new_full(CMK_SHADOW_MASK_ALL, 40);
 	clutter_actor_add_child(CLUTTER_ACTOR(shadow), dialog);
@@ -922,6 +931,9 @@ static void on_key_backlight_down(MetaDisplay *display, MetaScreen *screen, Meta
 static void on_key_kb_backlight_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
 {
 }
+
+// TODO: TEMP
+extern gboolean graphene_session_exit(gboolean failed);
 
 static void on_key_kb_backlight_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
 {

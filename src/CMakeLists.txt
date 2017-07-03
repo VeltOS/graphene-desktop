@@ -29,7 +29,7 @@ pkg_check_modules(LIBPULSEGLIB REQUIRED libpulse-mainloop-glib>=8.0)
 pkg_check_modules(POLKITAGENT REQUIRED polkit-agent-1)
 pkg_check_modules(LIBGNOMEMENU REQUIRED libgnome-menu-3.0>=3.13)
 pkg_check_modules(LIBACT REQUIRED accountsservice>=0.6)
-pkg_check_modules(LIBCMK REQUIRED libcmk>=0.2)
+pkg_check_modules(LIBCMK REQUIRED libcmk>=0.3)
 link_directories(${LIBMUTTER_LIBRARY_DIRS})
 
 add_executable(graphene-desktop
@@ -73,7 +73,7 @@ target_link_libraries(graphene-desktop
 	m
 )
 target_include_directories(graphene-desktop PRIVATE
-	${CMAKE_CURRENT_BINARY_DIR} 
+	${CMAKE_CURRENT_BINARY_DIR}
 	${GIOUNIX2_INCLUDE_DIRS}
 	${LIBMUTTER_INCLUDE_DIRS}
 	${LIBPULSEGLIB_INCLUDE_DIRS}

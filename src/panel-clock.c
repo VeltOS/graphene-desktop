@@ -34,6 +34,8 @@ static void graphene_clock_label_class_init(GrapheneClockLabelClass *class)
 
 static void graphene_clock_label_init(GrapheneClockLabel *self)
 {
+	cmk_label_set_bold(CMK_LABEL(self), TRUE);
+	
 	self->format = g_new(gchar, FORMAT_STRING_LENGTH);
 	self->format[0] = '\0'; // Empty string
 	

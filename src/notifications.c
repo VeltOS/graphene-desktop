@@ -269,7 +269,7 @@ static void graphene_notification_box_allocate(ClutterActor *self_, const Clutte
 	GList *children = clutter_actor_get_children(self_);
 	children = g_list_sort(children, (GCompareFunc)notification_compare_func);
 	
-	gfloat scale = cmk_widget_style_get_scale_factor(CMK_WIDGET(self_));
+	gfloat dp = cmk_widget_get_dp_scale(CMK_WIDGET(self_));
 
 	guint i=0;
 	for(GList *it=children; it!=NULL; it=it->next)
@@ -280,7 +280,7 @@ static void graphene_notification_box_allocate(ClutterActor *self_, const Clutte
 		box.y1 = NOTIFICATION_SPACING + i*(NOTIFICATION_HEIGHT + NOTIFICATION_SPACING);
 		box.x2 = box.x1 + NOTIFICATION_WIDTH;
 		box.y2 = box.y1 + NOTIFICATION_HEIGHT;
-		cmk_scale_actor_box(&box, scale, TRUE);
+		cmk_scale_actor_box(&box, dp, TRUE);
 
 		clutter_actor_save_easing_state(n_);
 		clutter_actor_set_easing_mode(n_, CLUTTER_EASE_OUT_SINE);
@@ -303,7 +303,7 @@ static void graphene_notification_allocate(ClutterActor *self_, const ClutterAct
 static gboolean graphene_notification_press(ClutterActor *self_, ClutterButtonEvent *event);
 static gboolean graphene_notification_enter(ClutterActor *self_, ClutterCrossingEvent *event);
 static gboolean graphene_notification_leave(ClutterActor *self_, ClutterCrossingEvent *event);
-static void on_background_changed(CmkWidget *self_);
+static void on_styles_changed(CmkWidget *self_, guint flags);
 
 GrapheneNotification * graphene_notification_new(void)
 {
@@ -317,7 +317,7 @@ static void graphene_notification_class_init(GrapheneNotificationClass *class)
 	CLUTTER_ACTOR_CLASS(class)->button_press_event = graphene_notification_press;
 	CLUTTER_ACTOR_CLASS(class)->enter_event = graphene_notification_enter;
 	CLUTTER_ACTOR_CLASS(class)->leave_event = graphene_notification_leave;
-	CMK_WIDGET_CLASS(class)->background_changed = on_background_changed;
+	CMK_WIDGET_CLASS(class)->styles_changed = on_styles_changed;
 }
 
 static void graphene_notification_init(GrapheneNotification *self)
@@ -333,7 +333,7 @@ static void graphene_notification_init(GrapheneNotification *self)
 	clutter_actor_set_reactive(CLUTTER_ACTOR(self), TRUE);
 
 	cmk_widget_set_draw_background_color(CMK_WIDGET(self), TRUE);
-	cmk_widget_set_background_color_name(CMK_WIDGET(self), "background");
+	cmk_widget_set_background_color(CMK_WIDGET(self), "background");
 }
 
 static void graphene_notification_dispose(GObject *self_)
@@ -362,16 +362,21 @@ static void graphene_notification_set_timeout(GrapheneNotification *self, gint t
 		self->timeoutSourceId = g_timeout_add(timeout, (GSourceFunc)remove_notification, self);
 }
 
+#define WIDTH_PADDING 10
+#define HEIGHT_PADDING 10
+
 static void graphene_notification_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags)
 {
 	GrapheneNotification *self = GRAPHENE_NOTIFICATION(self_);
-	gfloat padding = cmk_widget_style_get_padding(CMK_WIDGET(self_));
-	gfloat scale = cmk_widget_style_get_scale_factor(CMK_WIDGET(self_));
+	gfloat padMul = cmk_widget_get_padding_multiplier(CMK_WIDGET(self_));
+	gfloat dp = cmk_widget_get_dp_scale(CMK_WIDGET(self_));
+	gfloat wPad = WIDTH_PADDING * dp * padMul;
+	gfloat hPad = HEIGHT_PADDING * dp * padMul;
 
-	ClutterActorBox padBox = {padding, padding, (box->x2-box->x1)-padding, (box->y2-box->y1)-padding};
+	ClutterActorBox padBox = {wPad, hPad, (box->x2-box->x1)-wPad, (box->y2-box->y1)-hPad};
 
-	ClutterActorBox iconBox = {padBox.x1, padBox.y1, padBox.x1+48*scale, padBox.y2};
-	padBox.x1 = iconBox.x2 + padding;
+	ClutterActorBox iconBox = {padBox.x1, padBox.y1, padBox.x1+48*dp, padBox.y2};
+	padBox.x1 = iconBox.x2 + wPad;
 
 	clutter_actor_allocate(CLUTTER_ACTOR(self->icon), &iconBox, flags);
 	clutter_actor_allocate(CLUTTER_ACTOR(self->text), &padBox, flags);
@@ -397,9 +402,14 @@ static gboolean graphene_notification_leave(ClutterActor *self_, ClutterCrossing
 	return TRUE;
 }
 
-static void on_background_changed(CmkWidget *self_)
+static void on_styles_changed(CmkWidget *self_, guint flags)
 {
-	const ClutterColor *color = cmk_widget_get_foreground_color(self_);
-	clutter_text_set_color(GRAPHENE_NOTIFICATION(self_)->text, color);
-	CMK_WIDGET_CLASS(graphene_notification_parent_class)->background_changed(self_);
+	CMK_WIDGET_CLASS(graphene_notification_parent_class)->styles_changed(self_, flags);
+	if((flags & CMK_STYLE_FLAG_COLORS)
+	|| (flags & CMK_STYLE_FLAG_BACKGROUND_NAME))
+	{
+		const ClutterColor *color =
+			cmk_widget_get_foreground_clutter_color(self_);
+		clutter_text_set_color(GRAPHENE_NOTIFICATION(self_)->text, color);
+	}
 }

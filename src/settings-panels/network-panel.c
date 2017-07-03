@@ -132,7 +132,7 @@ static void on_device_added(GrapheneNetworkPanel *self, CskNetworkDevice *device
 	
 	const gchar *name = csk_network_device_get_name(device);
 	group->label = graphene_category_label_new(name);
-	group->sep = separator_new();
+	group->sep = CLUTTER_ACTOR(cmk_separator_new_h());
 
 	if(clutter_actor_get_n_children(CLUTTER_ACTOR(self)) == 0)
 		clutter_actor_hide(group->sep);
@@ -262,11 +262,11 @@ static void on_active_ap_changed(CmkWidget *group, GParamSpec *spec, CskNetworkD
 			continue;
 		if(csk_network_access_point_matches(ap, activeAp))
 		{
-			cmk_widget_set_background_color_name(CMK_WIDGET(button), "selected");
+			cmk_widget_set_background_color(CMK_WIDGET(button), "selected");
 			clutter_actor_set_child_above_sibling(CLUTTER_ACTOR(group), button, CLUTTER_ACTOR(NDEVICE_GROUP(group)->label));
 		}
 		else
-			cmk_widget_set_background_color_name(CMK_WIDGET(button), "background");
+			cmk_widget_set_background_color(CMK_WIDGET(button), "background");
 	}
 }
 

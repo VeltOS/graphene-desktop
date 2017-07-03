@@ -41,16 +41,6 @@ static void graphene_settings_panel_init(GrapheneSettingsPanel *self)
 	enum_settings_widgets(self);
 }
 
-ClutterActor * separator_new()
-{
-	ClutterActor *sep = clutter_actor_new();
-	ClutterColor c = {0,0,0,25};
-	clutter_actor_set_background_color(sep, &c);
-	clutter_actor_set_x_expand(sep, TRUE);
-	clutter_actor_set_height(sep, 2);
-	return sep;
-}
-
 ClutterLayoutManager * clutter_vertical_box_new()
 {
 	ClutterBoxLayout *layout = CLUTTER_BOX_LAYOUT(clutter_box_layout_new());
@@ -98,7 +88,7 @@ static void add_setting_widget_n(GrapheneSettingsPanel *self, const gchar *title
 
 static void add_setting_widget(GrapheneSettingsPanel *self, const gchar *title, const gchar *iconName, const gchar *panel, gboolean toggleable)
 {	
-	//clutter_actor_add_child(CLUTTER_ACTOR(self), separator_new());
+	//clutter_actor_add_child(CLUTTER_ACTOR(self), cmk_separator_new_h());
 
 	CmkButton *button = cmk_button_new();
 	CmkIcon *icon = cmk_icon_new_from_name(iconName, 24);
@@ -113,8 +103,8 @@ static void add_setting_widget(GrapheneSettingsPanel *self, const gchar *title, 
 
 CmkLabel * graphene_category_label_new(const gchar *title)
 {
-	CmkLabel *label = cmk_label_new_full(title, 1, TRUE);
-	cmk_widget_set_margin_multipliers(CMK_WIDGET(label), 2.5, 2, 1, 1);
+	CmkLabel *label = cmk_label_new_full(title, TRUE);
+	cmk_widget_set_margin(CMK_WIDGET(label), 25, 20, 10, 10);
 	clutter_actor_set_x_expand(CLUTTER_ACTOR(label), TRUE);
 	clutter_actor_set_x_align(CLUTTER_ACTOR(label), CLUTTER_ACTOR_ALIGN_START);
 	return label;
@@ -134,7 +124,7 @@ static void enum_settings_widgets(GrapheneSettingsPanel *self)
 	add_setting_widget(self, "Privacy",          "preferences-system-privacy",       "privacy",       FALSE);
 	add_setting_widget(self, "Region & Language","preferences-desktop-locale",       "region",        FALSE);
 	add_setting_widget(self, "Search",           "preferences-system-search",        "search",        FALSE);
-	clutter_actor_add_child(CLUTTER_ACTOR(self), separator_new());
+	cmk_widget_add_child(CMK_WIDGET(self), cmk_separator_new_h());
 	add_settings_category_label(CMK_WIDGET(self), "Hardware");
 	add_setting_widget(self, "Bluetooth",        "bluetooth",                        "bluetooth",     TRUE);
 	add_setting_widget(self, "Color",            "preferences-color",                "color",         FALSE);
@@ -147,7 +137,7 @@ static void enum_settings_widgets(GrapheneSettingsPanel *self)
 	add_setting_widget(self, "Printers",         "printer",                          "printers",      FALSE);
 	add_setting_widget(self, "Sound",            "multimedia-volume-control",        "sound",         TRUE);
 	add_setting_widget(self, "Wacom Tablet",     "input-tablet",                     "wacom",         FALSE);
-	clutter_actor_add_child(CLUTTER_ACTOR(self), separator_new());
+	cmk_widget_add_child(CMK_WIDGET(self), cmk_separator_new_h());
 	add_settings_category_label(CMK_WIDGET(self), "System");
 	add_setting_widget(self, "Date & Time",      "preferences-system-time",          "datetime",      FALSE);
 	add_setting_widget(self, "Details",          "applications-system",              "info",          FALSE);

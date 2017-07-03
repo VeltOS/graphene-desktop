@@ -37,7 +37,7 @@ G_DEFINE_TYPE(GrapheneSettingsPopup, graphene_settings_popup, CMK_TYPE_WIDGET)
 
 static void graphene_settings_popup_dispose(GObject *self_);
 static void graphene_settings_popup_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags);
-static void on_style_changed(CmkWidget *self_);
+static void on_styles_changed(CmkWidget *self_, guint flags);
 static void on_logout_button_activate(CmkButton *button, GrapheneSettingsPopup *self);
 static void on_user_manager_notify_loaded(GrapheneSettingsPopup *self);
 static void on_panel_replace(GrapheneSettingsPopup *self, CmkWidget *replacement, CmkWidget *top);
@@ -57,7 +57,7 @@ static void graphene_settings_popup_class_init(GrapheneSettingsPopupClass *class
 {
 	G_OBJECT_CLASS(class)->dispose = graphene_settings_popup_dispose;
 	CLUTTER_ACTOR_CLASS(class)->allocate = graphene_settings_popup_allocate;
-	CMK_WIDGET_CLASS(class)->style_changed = on_style_changed;
+	CMK_WIDGET_CLASS(class)->styles_changed = on_styles_changed;
 }
 
 static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
@@ -68,7 +68,7 @@ static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
 	self->window = cmk_widget_new();
 	cmk_widget_set_draw_background_color(self->window, TRUE);
 	clutter_actor_set_reactive(CLUTTER_ACTOR(self->window), TRUE);
-	cmk_widget_set_background_color_name(self->window, "background");
+	cmk_widget_set_background_color(self->window, "background");
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->window));
 
 	self->infoBox = cmk_widget_new();
@@ -76,19 +76,24 @@ static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->infoBox));
 
 	self->usernameLabel = cmk_label_new();
+	cmk_widget_set_margin(CMK_WIDGET(self->usernameLabel), 0, 0, 10, 10);
+	cmk_label_set_font_size_pt(self->usernameLabel, 16);
+	cmk_label_set_bold(self->usernameLabel, TRUE);
 	clutter_actor_set_x_expand(CLUTTER_ACTOR(self->usernameLabel), TRUE);
 	clutter_actor_set_x_align(CLUTTER_ACTOR(self->usernameLabel), CLUTTER_ACTOR_ALIGN_CENTER);
+	cmk_widget_set_style_parent(CMK_WIDGET(self->usernameLabel), CMK_WIDGET(self->window));
 	clutter_actor_add_child(CLUTTER_ACTOR(self->infoBox), CLUTTER_ACTOR(self->usernameLabel));
 
 	self->logoutButton = cmk_button_new();
+	cmk_widget_set_margin(CMK_WIDGET(self->logoutButton), 0, 0, 0, 10);
 	cmk_button_set_type(self->logoutButton, CMK_BUTTON_TYPE_CIRCLE);
 	cmk_button_set_content(self->logoutButton, CMK_WIDGET(cmk_icon_new_full("system-shutdown-symbolic", NULL, 48, TRUE)));
-	cmk_widget_style_set_padding(CMK_WIDGET(self->logoutButton), 0);
+	cmk_widget_set_padding_multiplier(CMK_WIDGET(self->logoutButton), 0);
 	cmk_widget_set_style_parent(CMK_WIDGET(self->logoutButton), CMK_WIDGET(self->window));
 	g_signal_connect(self->logoutButton, "activate", G_CALLBACK(on_logout_button_activate), self);
 	clutter_actor_add_child(CLUTTER_ACTOR(self->infoBox), CLUTTER_ACTOR(self->logoutButton));
 
-	clutter_actor_add_child(CLUTTER_ACTOR(self->infoBox), separator_new());
+	cmk_widget_add_child(CMK_WIDGET(self->infoBox), cmk_separator_new_h());
 
 	GrapheneSettingsPanel *panel = graphene_settings_panel_new();
 	g_signal_connect_swapped(panel, "replace", G_CALLBACK(on_panel_replace), self);
@@ -128,7 +133,7 @@ static void graphene_settings_popup_allocate(ClutterActor *self_, const ClutterA
 {
 	GrapheneSettingsPopup *self = GRAPHENE_SETTINGS_POPUP(self_);
 	
-	gfloat width = PANEL_WIDTH * cmk_widget_style_get_scale_factor(CMK_WIDGET(self_));
+	gfloat width = CMK_DP(self_, PANEL_WIDTH);
 	width = MAX(box->x2-width, box->x1+(box->x2-box->x1)/2);
 
 	ClutterActorBox windowBox = {width, box->y1, box->x2, box->y2};
@@ -148,18 +153,9 @@ static void graphene_settings_popup_allocate(ClutterActor *self_, const ClutterA
 	CLUTTER_ACTOR_CLASS(graphene_settings_popup_parent_class)->allocate(self_, box, flags);
 }
 
-static void on_style_changed(CmkWidget *self_)
+static void on_styles_changed(CmkWidget *self_, guint flags)
 {
-	GrapheneSettingsPopup *self = GRAPHENE_SETTINGS_POPUP(self_);
-
-	float padding = cmk_widget_style_get_padding(self_);
-	ClutterMargin margin = {0, 0, padding, padding};
-	ClutterMargin margin2 = {0, 0, 0, padding};
-	clutter_actor_set_margin(CLUTTER_ACTOR(self->usernameLabel), &margin);
-	clutter_actor_set_margin(CLUTTER_ACTOR(self->logoutButton), &margin2);
-
-	clutter_actor_queue_relayout(CLUTTER_ACTOR(self_));
-	CMK_WIDGET_CLASS(graphene_settings_popup_parent_class)->style_changed(self_);
+	CMK_WIDGET_CLASS(graphene_settings_popup_parent_class)->styles_changed(self_, flags);
 }
 
 static void on_logout_button_activate(CmkButton *button, GrapheneSettingsPopup *self)
@@ -188,9 +184,9 @@ static void on_user_updated(GrapheneSettingsPopup *self, ActUser *user)
 		return;
 	}
 
-	gchar *markup = g_strdup_printf("<span font='16'><b>%s</b></span>", realName);
-	cmk_label_set_markup(self->usernameLabel, markup);
-	g_free(markup);
+	//gchar *markup = g_strdup_printf("<span font='16'><b>%s</b></span>", realName);
+	cmk_label_set_text(self->usernameLabel, realName);
+	//g_free(markup);
 }
 
 static void on_user_manager_notify_loaded(GrapheneSettingsPopup *self)
@@ -221,9 +217,9 @@ static void on_panel_replace(GrapheneSettingsPopup *self, CmkWidget *replacement
 	cmk_widget_set_style_parent(replacement, self->window);
 	clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), CLUTTER_ACTOR(replacement));
 	cmk_widget_fade_in(CMK_WIDGET(replacement));
-	gchar *markup = g_strdup_printf("<span font='16'><b>%s</b></span>", clutter_actor_get_name(CLUTTER_ACTOR(replacement)));
-	cmk_label_set_markup(self->usernameLabel, markup);
-	g_free(markup);
+	//gchar *markup = g_strdup_printf("<span font='16'><b>%s</b></span>", clutter_actor_get_name(CLUTTER_ACTOR(replacement)));
+	cmk_label_set_text(self->usernameLabel, clutter_actor_get_name(CLUTTER_ACTOR(replacement)));
+	//g_free(markup);
 	CmkIcon *buttonIcon = CMK_ICON(cmk_button_get_content(self->logoutButton));
 	cmk_icon_set_icon(buttonIcon, "back");
 	self->panelStack = g_list_prepend(self->panelStack, replacement);

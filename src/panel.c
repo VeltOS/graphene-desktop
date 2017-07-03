@@ -43,7 +43,7 @@ struct _GraphenePanel
 };
 
 static void graphene_panel_dispose(GObject *self_);
-static void on_style_changed(CmkWidget *self_);
+static void on_styles_changed(CmkWidget *self_, guint flags);
 static void graphene_panel_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags);
 static void on_launcher_button_activate(CmkButton *button, GraphenePanel *self);
 static void on_settings_button_activate(CmkButton *button, GraphenePanel *self);
@@ -68,7 +68,7 @@ static void graphene_panel_class_init(GraphenePanelClass *class)
 {
 	G_OBJECT_CLASS(class)->dispose = graphene_panel_dispose;
 	CLUTTER_ACTOR_CLASS(class)->allocate = graphene_panel_allocate;
-	CMK_WIDGET_CLASS(class)->style_changed = on_style_changed;
+	CMK_WIDGET_CLASS(class)->styles_changed = on_styles_changed;
 }
 
 static void graphene_panel_init(GraphenePanel *self)
@@ -76,7 +76,7 @@ static void graphene_panel_init(GraphenePanel *self)
 	self->bar = cmk_widget_new();
 	clutter_actor_set_reactive(CLUTTER_ACTOR(self->bar), TRUE);
 	cmk_widget_set_draw_background_color(self->bar, TRUE);
-	cmk_widget_set_background_color_name(self->bar, "background");
+	cmk_widget_set_background_color(self->bar, "background");
 
 	clutter_actor_set_layout_manager(CLUTTER_ACTOR(self->bar), clutter_box_layout_new());
 
@@ -90,6 +90,7 @@ static void graphene_panel_init(GraphenePanel *self)
 	// Launcher
 	self->launcher = cmk_button_new();
 	CmkIcon *launcherIcon = cmk_icon_new_full("open-menu-symbolic", "Adwaita", PANEL_HEIGHT, TRUE);
+	cmk_widget_set_margin(CMK_WIDGET(launcherIcon), 4, 4, 0, 0);
 	cmk_button_set_content(self->launcher, CMK_WIDGET(launcherIcon));
 	g_signal_connect(self->launcher, "activate", G_CALLBACK(on_launcher_button_activate), self);
 	clutter_actor_add_child(CLUTTER_ACTOR(self->bar), CLUTTER_ACTOR(self->launcher));
@@ -121,6 +122,7 @@ static void graphene_panel_init(GraphenePanel *self)
 
 	// Clock
 	self->clock = graphene_clock_label_new();
+	cmk_widget_set_margin(CMK_WIDGET(self->clock), 10, 10, 0, 0);
 	clutter_actor_add_child(CLUTTER_ACTOR(self->bar), CLUTTER_ACTOR(self->clock));
 }
 
@@ -131,6 +133,8 @@ static void graphene_panel_dispose(GObject *self_)
 	G_OBJECT_CLASS(graphene_panel_parent_class)->dispose(self_);
 }
 
+#define SHADOW_SIZE 10 // dp
+
 static void graphene_panel_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags)
 {
 	GraphenePanel *self = GRAPHENE_PANEL(self_);
@@ -138,8 +142,8 @@ static void graphene_panel_allocate(ClutterActor *self_, const ClutterActorBox *
 	gfloat width = box->x2 - box->x1;
 	gfloat height = box->y2 - box->y1;
 	
-	gfloat panelHeight = PANEL_HEIGHT * cmk_widget_style_get_scale_factor(CMK_WIDGET(self_));
-	gfloat shadowSize = cmk_widget_style_get_padding(CMK_WIDGET(self_));
+	gfloat panelHeight = CMK_DP(self_, PANEL_HEIGHT);
+	gfloat shadowSize = SHADOW_SIZE * cmk_widget_get_padding_multiplier(CMK_WIDGET(self_));
 	ClutterActorBox barBox = {0, height-panelHeight, width, height};
 	ClutterActorBox sdcBox = {0, barBox.y1-shadowSize, width, barBox.y1+(shadowSize*2)};
 	ClutterActorBox popupBox = {0, 0, width, barBox.y1};
@@ -153,19 +157,12 @@ static void graphene_panel_allocate(ClutterActor *self_, const ClutterActorBox *
 	CLUTTER_ACTOR_CLASS(graphene_panel_parent_class)->allocate(self_, box, flags);
 }
 
-static void on_style_changed(CmkWidget *self_)
+static void on_styles_changed(CmkWidget *self_, guint flags)
 {
-	GraphenePanel *self = GRAPHENE_PANEL(self_);
+	CMK_WIDGET_CLASS(graphene_panel_parent_class)->styles_changed(self_, flags);
 
-	float padding = cmk_widget_style_get_padding(self_);
-	ClutterMargin margin = {padding, padding, 0, 0};
-	clutter_actor_set_margin(CLUTTER_ACTOR(self->clock), &margin);
-
-	cmk_widget_style_set_padding(CMK_WIDGET(self->launcher), cmk_widget_style_get_padding(self_) * 1.3 / cmk_widget_style_get_scale_factor(self_));
-	cmk_shadow_set_radius(self->sdc, padding);
-	clutter_actor_queue_relayout(CLUTTER_ACTOR(self_));
-
-	CMK_WIDGET_CLASS(graphene_panel_parent_class)->style_changed(self_);
+	if((flags & CMK_STYLE_FLAG_DP))
+		cmk_shadow_set_radius(GRAPHENE_PANEL(self_)->sdc, CMK_DP(self_, SHADOW_SIZE));
 }
 
 void graphene_panel_show_main_menu(GraphenePanel *self)

@@ -68,7 +68,6 @@ static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
 	self->window = cmk_widget_new();
 	cmk_widget_set_draw_background_color(self->window, TRUE);
 	clutter_actor_set_reactive(CLUTTER_ACTOR(self->window), TRUE);
-	cmk_widget_set_background_color(self->window, "background");
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->window));
 
 	self->infoBox = cmk_widget_new();
@@ -77,16 +76,15 @@ static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
 
 	self->usernameLabel = cmk_label_new();
 	cmk_widget_set_margin(CMK_WIDGET(self->usernameLabel), 0, 0, 10, 10);
-	cmk_label_set_font_size_pt(self->usernameLabel, 16);
+	cmk_label_set_font_size(self->usernameLabel, 21);
 	cmk_label_set_bold(self->usernameLabel, TRUE);
 	clutter_actor_set_x_expand(CLUTTER_ACTOR(self->usernameLabel), TRUE);
 	clutter_actor_set_x_align(CLUTTER_ACTOR(self->usernameLabel), CLUTTER_ACTOR_ALIGN_CENTER);
 	cmk_widget_set_style_parent(CMK_WIDGET(self->usernameLabel), CMK_WIDGET(self->window));
 	clutter_actor_add_child(CLUTTER_ACTOR(self->infoBox), CLUTTER_ACTOR(self->usernameLabel));
 
-	self->logoutButton = cmk_button_new();
+	self->logoutButton = cmk_button_new(CMK_BUTTON_TYPE_FLAT_CIRCLE);
 	cmk_widget_set_margin(CMK_WIDGET(self->logoutButton), 0, 0, 0, 10);
-	cmk_button_set_type(self->logoutButton, CMK_BUTTON_TYPE_CIRCLE);
 	cmk_button_set_content(self->logoutButton, CMK_WIDGET(cmk_icon_new_full("system-shutdown-symbolic", NULL, 48, TRUE)));
 	cmk_widget_set_padding_multiplier(CMK_WIDGET(self->logoutButton), 0);
 	cmk_widget_set_style_parent(CMK_WIDGET(self->logoutButton), CMK_WIDGET(self->window));

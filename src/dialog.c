@@ -125,8 +125,6 @@ static void graphene_dialog_init(GrapheneDialog *self)
 	clutter_actor_set_x_align(private->buttonBox, CLUTTER_ACTOR_ALIGN_END);
 	clutter_actor_add_child(CLUTTER_ACTOR(self), private->buttonBox);
 
-	cmk_widget_set_background_color(CMK_WIDGET(self), "background");
-
 	g_signal_connect(self, "notify::size", G_CALLBACK(on_size_changed), canvas);
 	g_signal_connect(self, "captured-event", G_CALLBACK(on_dialog_captured_event), self);
 	g_signal_connect(self, "notify::mapped", G_CALLBACK(grab_focus_on_map), NULL);
@@ -359,7 +357,7 @@ static void on_styles_changed(CmkWidget *self_, guint flags)
 	GrapheneDialogPrivate *private = PRIVATE(GRAPHENE_DIALOG(self_));
 	if(private->message)
 	{
-		const ClutterColor *color = cmk_widget_get_foreground_clutter_color(self_);
+		const ClutterColor *color = cmk_widget_get_default_named_color(self_, "foreground");
 		clutter_text_set_color(private->message, color);
 	}
 }
@@ -388,7 +386,7 @@ static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, in
 	cairo_arc(cr, radius, radius, radius, 180 * degrees, 270 * degrees);
 	cairo_close_path(cr);
 
-	cairo_set_source_clutter_color(cr, cmk_widget_get_background_clutter_color(CMK_WIDGET(self)));
+	cairo_set_source_clutter_color(cr, cmk_widget_get_default_named_color(CMK_WIDGET(self), "background"));
 	cairo_fill(cr);
 	return TRUE;
 }
@@ -429,7 +427,7 @@ void graphene_dialog_set_message(GrapheneDialog *self, const gchar *message)
 	if(!private->message)
 	{
 		private->message = CLUTTER_TEXT(clutter_text_new());	
-		const ClutterColor *color = cmk_widget_get_foreground_clutter_color(CMK_WIDGET(self));
+		const ClutterColor *color = cmk_widget_get_default_named_color(CMK_WIDGET(self), "foreground");
 		clutter_text_set_color(private->message, color);
 		clutter_text_set_line_wrap(private->message, TRUE);
 		clutter_text_set_text(private->message, message);
@@ -472,7 +470,7 @@ void graphene_dialog_set_buttons(GrapheneDialog *self, const gchar * const *butt
 	guint i=0;
 	while((name = buttons[i++]) != NULL)
 	{
-		CmkButton *button = cmk_button_new_full(name, CMK_BUTTON_TYPE_BEVELED);
+		CmkButton *button = cmk_button_new_with_text(name, CMK_BUTTON_TYPE_FLAT);
 		cmk_widget_set_style_parent(CMK_WIDGET(button), CMK_WIDGET(self));
 		g_signal_connect_swapped(button, "activate", G_CALLBACK(on_button_activate), self);
 		clutter_actor_add_child(private->buttonBox, CLUTTER_ACTOR(button));

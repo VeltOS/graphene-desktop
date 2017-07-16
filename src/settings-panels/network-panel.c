@@ -262,11 +262,11 @@ static void on_active_ap_changed(CmkWidget *group, GParamSpec *spec, CskNetworkD
 			continue;
 		if(csk_network_access_point_matches(ap, activeAp))
 		{
-			cmk_widget_set_background_color(CMK_WIDGET(button), "selected");
+			cmk_button_set_selected(CMK_BUTTON(button), TRUE);
 			clutter_actor_set_child_above_sibling(CLUTTER_ACTOR(group), button, CLUTTER_ACTOR(NDEVICE_GROUP(group)->label));
 		}
 		else
-			cmk_widget_set_background_color(CMK_WIDGET(button), "background");
+			cmk_button_set_selected(CMK_BUTTON(button), FALSE);
 	}
 }
 

@@ -333,7 +333,6 @@ static void graphene_notification_init(GrapheneNotification *self)
 	clutter_actor_set_reactive(CLUTTER_ACTOR(self), TRUE);
 
 	cmk_widget_set_draw_background_color(CMK_WIDGET(self), TRUE);
-	cmk_widget_set_background_color(CMK_WIDGET(self), "background");
 }
 
 static void graphene_notification_dispose(GObject *self_)
@@ -405,11 +404,10 @@ static gboolean graphene_notification_leave(ClutterActor *self_, ClutterCrossing
 static void on_styles_changed(CmkWidget *self_, guint flags)
 {
 	CMK_WIDGET_CLASS(graphene_notification_parent_class)->styles_changed(self_, flags);
-	if((flags & CMK_STYLE_FLAG_COLORS)
-	|| (flags & CMK_STYLE_FLAG_BACKGROUND_NAME))
+	if(flags & CMK_STYLE_FLAG_COLORS)
 	{
 		const ClutterColor *color =
-			cmk_widget_get_foreground_clutter_color(self_);
+			cmk_widget_get_default_named_color(self_, "foreground");
 		clutter_text_set_color(GRAPHENE_NOTIFICATION(self_)->text, color);
 	}
 }

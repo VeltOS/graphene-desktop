@@ -76,7 +76,6 @@ static void graphene_panel_init(GraphenePanel *self)
 	self->bar = cmk_widget_new();
 	clutter_actor_set_reactive(CLUTTER_ACTOR(self->bar), TRUE);
 	cmk_widget_set_draw_background_color(self->bar, TRUE);
-	cmk_widget_set_background_color(self->bar, "background");
 
 	clutter_actor_set_layout_manager(CLUTTER_ACTOR(self->bar), clutter_box_layout_new());
 
@@ -88,9 +87,9 @@ static void graphene_panel_init(GraphenePanel *self)
 	clutter_actor_set_clip_to_allocation(CLUTTER_ACTOR(self), TRUE);
 
 	// Launcher
-	self->launcher = cmk_button_new();
-	CmkIcon *launcherIcon = cmk_icon_new_full("open-menu-symbolic", "Adwaita", PANEL_HEIGHT, TRUE);
-	cmk_widget_set_margin(CMK_WIDGET(launcherIcon), 4, 4, 0, 0);
+	self->launcher = cmk_button_new(CMK_BUTTON_TYPE_EMBED);
+	CmkIcon *launcherIcon = cmk_icon_new_full("velt", "Velt", PANEL_HEIGHT*2/3, TRUE);
+	cmk_widget_set_margin(CMK_WIDGET(launcherIcon), 8, 8, 0, 0);
 	cmk_button_set_content(self->launcher, CMK_WIDGET(launcherIcon));
 	g_signal_connect(self->launcher, "activate", G_CALLBACK(on_launcher_button_activate), self);
 	clutter_actor_add_child(CLUTTER_ACTOR(self->bar), CLUTTER_ACTOR(self->launcher));
@@ -107,7 +106,7 @@ static void graphene_panel_init(GraphenePanel *self)
 	clutter_actor_add_child(CLUTTER_ACTOR(self->bar), CLUTTER_ACTOR(self->snHost));
 
 	// Settings
-	self->settingsApplet = cmk_button_new();
+	self->settingsApplet = cmk_button_new(CMK_BUTTON_TYPE_EMBED);
 	CmkWidget *iconBox = cmk_widget_new();
 	ClutterLayoutManager *layout = clutter_box_layout_new();
 	self->settingsAppletLayout = CLUTTER_BOX_LAYOUT(layout);
@@ -318,7 +317,7 @@ void graphene_panel_add_window(GraphenePanel *self, GrapheneWindow *window)
 		return;
 	CmkIcon *icon = cmk_icon_new(24); // Icon is 75% of panel height. 64 -> 48, 32 -> 24, etc.
 
-	CmkButton *button = cmk_button_new();
+	CmkButton *button = cmk_button_new(CMK_BUTTON_TYPE_EMBED);
 	g_signal_connect(button, "activate", G_CALLBACK(on_tasklist_button_activate), self);
 	g_signal_connect(button, "allocation-changed", G_CALLBACK(on_tasklist_button_allocation_changed), window);
 	cmk_button_set_content(button, CMK_WIDGET(icon));

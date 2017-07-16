@@ -75,7 +75,7 @@ static void on_settings_widget_clicked(GrapheneSettingsPanel *self, CmkButton *b
 
 static void add_setting_widget_n(GrapheneSettingsPanel *self, const gchar *title, const gchar *iconName, GType panel, gboolean toggleable)
 {	
-	CmkButton *button = cmk_button_new();
+	CmkButton *button = cmk_button_new(CMK_BUTTON_TYPE_FLAT);
 	CmkIcon *icon = cmk_icon_new_from_name(iconName, 24);
 	cmk_button_set_content(button, CMK_WIDGET(icon));
 	cmk_button_set_text(button, title);
@@ -90,7 +90,7 @@ static void add_setting_widget(GrapheneSettingsPanel *self, const gchar *title, 
 {	
 	//clutter_actor_add_child(CLUTTER_ACTOR(self), cmk_separator_new_h());
 
-	CmkButton *button = cmk_button_new();
+	CmkButton *button = cmk_button_new(CMK_BUTTON_TYPE_FLAT);
 	CmkIcon *icon = cmk_icon_new_from_name(iconName, 24);
 	cmk_button_set_content(button, CMK_WIDGET(icon));
 	cmk_button_set_text(button, title);

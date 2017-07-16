@@ -70,13 +70,12 @@ static void graphene_launcher_popup_init(GrapheneLauncherPopup *self)
 
 	self->window = cmk_widget_new();
 	cmk_widget_set_draw_background_color(self->window, TRUE);
-	cmk_widget_set_background_color(self->window, "background");
 	clutter_actor_set_reactive(CLUTTER_ACTOR(self->window), TRUE);
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->window));
 
 	// TODO: Search bar not tabbable because not a CmkWidget
 	self->searchBox = cmk_label_new();
-	cmk_label_set_font_size_pt(self->searchBox, 16);
+	cmk_label_set_font_size(self->searchBox, 21);
 	ClutterText *searchBoxBase = cmk_label_get_clutter_text(self->searchBox);
 	clutter_text_set_editable(searchBoxBase, TRUE);
 	clutter_text_set_activatable(searchBoxBase, TRUE);
@@ -245,7 +244,7 @@ static gboolean add_app(GrapheneLauncherPopup *self, GDesktopAppInfo *appInfo)
 			return FALSE;
 	}
 	
-	CmkButton *button = cmk_button_new();
+	CmkButton *button = cmk_button_new(CMK_BUTTON_TYPE_EMBED);
 	const gchar *iconName;
 	GIcon *gicon = g_app_info_get_icon(G_APP_INFO(appInfo));
 	if(G_IS_THEMED_ICON(gicon))

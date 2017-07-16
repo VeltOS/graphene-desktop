@@ -215,7 +215,7 @@ static void on_item_registered(GrapheneStatusNotifierHost *self, const gchar *se
 
 	item->icon = cmk_icon_new_from_name("", 24);
 
-	item->button = cmk_button_new();
+	item->button = cmk_button_new(CMK_BUTTON_TYPE_EMBED);
 	clutter_actor_hide(CLUTTER_ACTOR(item->button));
 	cmk_button_set_content(item->button, CMK_WIDGET(item->icon));
 	item->activateSignalId = g_signal_connect(item->button, "activate", G_CALLBACK(on_item_activate), item);

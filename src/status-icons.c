@@ -158,11 +158,6 @@ static void graphene_battery_icon_class_init(GrapheneBatteryIconClass *class)
 
 static void graphene_battery_icon_init(GrapheneBatteryIcon *self)
 {
-	ClutterColor bg = {0,0,0,0}; // Bg doesn't actually matter
-	ClutterColor fg = {255,0,0,255};
-	cmk_widget_set_named_color(CMK_WIDGET(self), "warning", &bg); 
-	cmk_widget_set_named_color(CMK_WIDGET(self), "warning-foreground", &fg); 
-
 	self->batInfo = csk_battery_info_get_default();
 	g_signal_connect_swapped(self->batInfo, "update", G_CALLBACK(battery_icon_on_update), self);
 	battery_icon_on_update(self, self->batInfo);
@@ -179,9 +174,10 @@ static void battery_icon_on_update(GrapheneBatteryIcon *self, CskBatteryInfo *in
 	cmk_icon_set_icon(CMK_ICON(self), iconName);
 	g_free(iconName);
 
+	ClutterColor fg = {255,0,0,255};
 	if(csk_battery_info_get_percent(info) <= 15)
-		cmk_widget_set_background_color(CMK_WIDGET(self), "warning");
+		cmk_widget_set_named_color(CMK_WIDGET(self), "foreground", &fg);
 	else
-		cmk_widget_set_background_color(CMK_WIDGET(self), NULL);
+		cmk_widget_set_named_color(CMK_WIDGET(self), "foreground", NULL);
 }
 

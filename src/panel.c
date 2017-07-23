@@ -21,7 +21,6 @@ struct _GraphenePanel
 {
 	CmkWidget parent;
 
-	CPanelModalCallback modalCb;
 	CPanelLogoutCallback logoutCb;
 	gpointer cbUserdata;
 
@@ -52,12 +51,11 @@ G_DEFINE_TYPE(GraphenePanel, graphene_panel, CMK_TYPE_WIDGET);
 
 
 
-GraphenePanel * graphene_panel_new(CPanelModalCallback modalCb, CPanelLogoutCallback logoutCb, gpointer userdata)
+GraphenePanel * graphene_panel_new(CPanelLogoutCallback logoutCb, gpointer userdata)
 {
 	GraphenePanel *panel = GRAPHENE_PANEL(g_object_new(GRAPHENE_TYPE_PANEL, NULL));
 	if(panel)
 	{
-		panel->modalCb = modalCb;
 		panel->logoutCb = logoutCb;
 		panel->cbUserdata = userdata;
 	}
@@ -191,8 +189,6 @@ static void on_popup_destroy(CmkWidget *popup, GraphenePanel *self)
 	cmk_focus_stack_pop(self->popup);
 	self->popup = NULL;
 	self->popupSource = NULL;
-	if(self->modalCb)
-		self->modalCb(FALSE, self->cbUserdata);
 }
 
 static void close_popup(GraphenePanel *self)
@@ -239,8 +235,6 @@ static void on_launcher_button_activate(CmkButton *button, GraphenePanel *self)
 			return;
 	}
 
-	if(self->modalCb)
-		self->modalCb(TRUE, self->cbUserdata);
 	self->popup = CMK_WIDGET(graphene_launcher_popup_new());
 	self->popupSource = button;
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->popup));
@@ -262,8 +256,6 @@ static void on_settings_button_activate(CmkButton *button, GraphenePanel *self)
 			return;
 	}
 
-	if(self->modalCb)
-		self->modalCb(TRUE, self->cbUserdata);
 	self->popup = CMK_WIDGET(graphene_settings_popup_new(self->logoutCb, self->cbUserdata));
 	self->popupSource = button;
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->popup));

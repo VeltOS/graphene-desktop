@@ -78,7 +78,7 @@ static void xfixes_add_input_actor(GrapheneWM *self, ClutterActor *actor);
 static void xfixes_remove_input_actor(GrapheneWM *self, ClutterActor *actor);
 static void graphene_wm_begin_modal(GrapheneWM *self);
 static void graphene_wm_end_modal(GrapheneWM *self);
-static void on_panel_request_modal(gboolean modal, GrapheneWM *self);
+static void on_cmk_grab(gboolean modal, GrapheneWM *self);
 static void center_actor_on_primary(GrapheneWM *self, ClutterActor *actor);
 
 static void minimize_done(ClutterActor *actor, MetaPlugin *plugin);
@@ -131,7 +131,7 @@ void graphene_wm_start(MetaPlugin *self_)
 	g_signal_connect_after(clutter_get_default_backend(), "resolution-changed", G_CALLBACK(reset_clutter_dpi), NULL);
 	g_signal_connect(iconLoader, "notify::scale", G_CALLBACK(on_global_scale_changed), NULL);
 	
-	cmk_set_grab_handler((CmkGrabHandler)on_panel_request_modal, self_);
+	cmk_set_grab_handler((CmkGrabHandler)on_cmk_grab, self_);
 
 	//g_timeout_add(50, sizewarp, NULL);	
 
@@ -172,7 +172,7 @@ void graphene_wm_start(MetaPlugin *self_)
 	clutter_actor_insert_child_above(self->stage, ACTOR(self->notificationBox), NULL);
 
 	// Panel is 2nd lowest
-	self->panel = graphene_panel_new((CPanelModalCallback)on_panel_request_modal, wm_request_logout, self);
+	self->panel = graphene_panel_new(wm_request_logout, self);
 	cmk_widget_set_style_parent(CMK_WIDGET(self->panel), style);
 	ClutterActor *panelBar = graphene_panel_get_input_actor(self->panel);
 	xfixes_add_input_actor(self, panelBar);
@@ -564,7 +564,7 @@ static void graphene_wm_end_modal(GrapheneWM *self)
 	xfixes_calculate_input_region(self);
 }
 
-static void on_panel_request_modal(gboolean modal, GrapheneWM *self)
+static void on_cmk_grab(gboolean modal, GrapheneWM *self)
 {
 	g_return_if_fail(GRAPHENE_IS_WM(self));
 	if(modal)

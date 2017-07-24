@@ -40,6 +40,7 @@ static const ClutterColor GrapheneColors[] = {
 	{255, 255, 255, 204}, // foreground (font)
 	{255, 255, 255, 40}, // hover
 	{255, 255, 255, 25}, // selected
+	{0, 0, 0, 180}, // shadow
 };
 
 static const float GrapheneBevelRadius = 3.0;
@@ -158,6 +159,7 @@ void graphene_wm_start(MetaPlugin *self_)
 	cmk_widget_set_named_color(style, "foreground", &GrapheneColors[1]);
 	cmk_widget_set_named_color(style, "hover", &GrapheneColors[2]);
 	cmk_widget_set_named_color(style, "selected", &GrapheneColors[3]);
+	cmk_widget_set_named_color(style, "shadow", &GrapheneColors[4]);
 
 	// Background is always below all other actors
 	ClutterActor *backgroundGroup = meta_background_group_new();
@@ -630,11 +632,11 @@ void graphene_wm_show_dialog(GrapheneWM *self, ClutterActor *dialog)
 		return;
 	
 	cmk_widget_set_style_parent(CMK_WIDGET(dialog), style);
+	
+	ClutterEffect *shadow = cmk_shadow_effect_new_drop_shadow(20, 0, 0, 1, 0);
+	clutter_actor_add_effect(dialog, shadow);
 
-	CmkShadow *shadow = cmk_shadow_new_full(CMK_SHADOW_MASK_ALL, 40);
-	clutter_actor_add_child(CLUTTER_ACTOR(shadow), dialog);
-
-	self->dialog = CLUTTER_ACTOR(shadow);
+	self->dialog = dialog;
 	clutter_actor_insert_child_above(self->stage, self->dialog, NULL);
 	clutter_actor_show(self->dialog);
 	clutter_actor_set_pivot_point(self->dialog, 0.5, 0.5);

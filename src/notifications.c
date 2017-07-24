@@ -119,9 +119,8 @@ GrapheneNotification * get_notification_by_id(GrapheneNotificationBox *self, gui
 	ClutterActor *child = clutter_actor_get_first_child(CLUTTER_ACTOR(self));
 	while(child)
 	{
-		ClutterActor *n_ = cmk_shadow_get_first_child(CMK_SHADOW(child));
-		if(GRAPHENE_IS_NOTIFICATION(n_) && GRAPHENE_NOTIFICATION(n_)->id == id)
-			return GRAPHENE_NOTIFICATION(n_);
+		if(GRAPHENE_IS_NOTIFICATION(child) && GRAPHENE_NOTIFICATION(child)->id == id)
+			return GRAPHENE_NOTIFICATION(child);
 		child = clutter_actor_get_next_sibling(child);
 	}
 	return NULL;
@@ -239,28 +238,22 @@ static gboolean on_dbus_call_get_server_information(GrapheneNotificationBox *sel
 
 static void add_notification(GrapheneNotificationBox *self, GrapheneNotification *n)
 {
-	CmkShadow *shadow = cmk_shadow_new_full(CMK_SHADOW_MASK_ALL, 20);
-	clutter_actor_add_child(CLUTTER_ACTOR(shadow), CLUTTER_ACTOR(n));
-	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(shadow));
+	ClutterEffect *shadow = cmk_shadow_effect_new_drop_shadow(10, 0, 0, 1, 0);
+	clutter_actor_add_effect(CLUTTER_ACTOR(n), shadow);
+	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(n));
 	if(self->notificationAddedCb)
 		self->notificationAddedCb(self->cbUserdata, CLUTTER_ACTOR(n));
 }
 
 static gboolean remove_notification(GrapheneNotification *n)
 {
-	ClutterActor *parent = clutter_actor_get_parent(CLUTTER_ACTOR(n));
-	if(CMK_IS_SHADOW(parent))
-		clutter_actor_destroy(parent);
-	else
-		clutter_actor_destroy(CLUTTER_ACTOR(n));
+	clutter_actor_destroy(CLUTTER_ACTOR(n));
 	return G_SOURCE_REMOVE;
 }
 
 static gint notification_compare_func(gconstpointer a, gconstpointer b)
 {
 	// TODO: Sort "critical" notifications to the top
-	a = cmk_shadow_get_first_child((CmkShadow *)a);
-	b = cmk_shadow_get_first_child((CmkShadow *)b);
 	return (((const GrapheneNotification *)a)->id < ((const GrapheneNotification *)b)->id) ? 1 : -1; // Sort newest to the top
 }
 

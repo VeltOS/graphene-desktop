@@ -25,7 +25,6 @@ struct _GraphenePanel
 	gpointer cbUserdata;
 
 	// These are owned by Clutter, not refed
-	CmkShadow *sdc;
 	CmkWidget *bar;
 	CmkButton *launcher;
 	CmkButton *settingsApplet;
@@ -75,10 +74,11 @@ static void graphene_panel_init(GraphenePanel *self)
 	clutter_actor_set_reactive(CLUTTER_ACTOR(self->bar), TRUE);
 	cmk_widget_set_draw_background_color(self->bar, TRUE);
 
+	ClutterEffect *shadow = cmk_shadow_effect_new_drop_shadow(10, 0, 0, 1, 0);
+	clutter_actor_add_effect(CLUTTER_ACTOR(self->bar), CLUTTER_EFFECT(shadow));
+
 	clutter_actor_set_layout_manager(CLUTTER_ACTOR(self->bar), clutter_box_layout_new());
 
-	self->sdc = cmk_shadow_new_full(CMK_SHADOW_MASK_TOP, 0);
-	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->sdc));
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->bar));
 
 	// Keep popup shadows from spilling onto other monitors
@@ -142,10 +142,8 @@ static void graphene_panel_allocate(ClutterActor *self_, const ClutterActorBox *
 	gfloat panelHeight = CMK_DP(self_, PANEL_HEIGHT);
 	gfloat shadowSize = SHADOW_SIZE * cmk_widget_get_padding_multiplier(CMK_WIDGET(self_));
 	ClutterActorBox barBox = {0, height-panelHeight, width, height};
-	ClutterActorBox sdcBox = {0, barBox.y1-shadowSize, width, barBox.y1+(shadowSize*2)};
 	ClutterActorBox popupBox = {0, 0, width, barBox.y1};
 
-	clutter_actor_allocate(CLUTTER_ACTOR(self->sdc), &barBox, flags);
 	clutter_actor_allocate(CLUTTER_ACTOR(self->bar), &barBox, flags);
 
 	if(self->popup)
@@ -157,9 +155,6 @@ static void graphene_panel_allocate(ClutterActor *self_, const ClutterActorBox *
 static void on_styles_changed(CmkWidget *self_, guint flags)
 {
 	CMK_WIDGET_CLASS(graphene_panel_parent_class)->styles_changed(self_, flags);
-
-	if((flags & CMK_STYLE_FLAG_DP))
-		cmk_shadow_set_radius(GRAPHENE_PANEL(self_)->sdc, CMK_DP(self_, SHADOW_SIZE));
 }
 
 void graphene_panel_show_main_menu(GraphenePanel *self)

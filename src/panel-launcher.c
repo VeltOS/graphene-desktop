@@ -19,7 +19,6 @@ struct _GrapheneLauncherPopup
 {
 	CmkWidget parent;
 	
-	CmkShadow *sdc;
 	CmkWidget *window;
 	CmkScrollBox *scroll;
 	CmkButton *firstApp;
@@ -65,13 +64,14 @@ static void graphene_launcher_popup_class_init(GrapheneLauncherPopupClass *class
 
 static void graphene_launcher_popup_init(GrapheneLauncherPopup *self)
 {
-	self->sdc = cmk_shadow_new_full(CMK_SHADOW_MASK_RIGHT | CMK_SHADOW_MASK_BOTTOM, 40);
-	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->sdc));
-
 	self->window = cmk_widget_new();
 	cmk_widget_set_draw_background_color(self->window, TRUE);
 	clutter_actor_set_reactive(CLUTTER_ACTOR(self->window), TRUE);
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->window));
+
+	CmkShadowEffect *shadow = cmk_shadow_effect_new(20);
+	cmk_shadow_effect_set(shadow, -10, -10, 1, 10);
+	clutter_actor_add_effect(CLUTTER_ACTOR(self->window), CLUTTER_EFFECT(shadow));
 
 	// TODO: Search bar not tabbable because not a CmkWidget
 	self->searchBox = cmk_label_new();
@@ -132,7 +132,6 @@ static void graphene_launcher_popup_allocate(ClutterActor *self_, const ClutterA
 	
 	gfloat width = CMK_DP(self_, LAUNCHER_WIDTH);
 	ClutterActorBox windowBox = {box->x1, box->y1, MIN(box->x1 + width, box->x2/2), box->y2};
-	ClutterActorBox sdcBox = {box->x1-sDepth, box->y1-sDepth, windowBox.x2 + sDepth, box->y2 + sDepth};
 
 	// I'm so sorry for how ugly this icon/searchbar allocation is.
 	// Eventually I'll move the search icon and the input box into its
@@ -148,7 +147,6 @@ static void graphene_launcher_popup_allocate(ClutterActor *self_, const ClutterA
 	ClutterActorBox scrollBox = {windowBox.x1, separatorBox.y2, windowBox.x2, windowBox.y2};
 
 	clutter_actor_allocate(CLUTTER_ACTOR(self->window), &windowBox, flags);
-	clutter_actor_allocate(CLUTTER_ACTOR(self->sdc), &windowBox, flags);
 	clutter_actor_allocate(CLUTTER_ACTOR(self->searchBox), &searchBox, flags);
 	clutter_actor_allocate(CLUTTER_ACTOR(self->searchIcon), &iconBox, flags);
 	clutter_actor_allocate(CLUTTER_ACTOR(self->searchSeparator), &separatorBox, flags);

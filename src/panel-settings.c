@@ -18,7 +18,6 @@ struct _GrapheneSettingsPopup
 	CSettingsLogoutCallback logoutCb;
 	gpointer cbUserdata;
 	
-	CmkShadow *sdc;
 	CmkWidget *window;
 	CmkScrollBox *scroll;
 	CmkWidget *infoBox;
@@ -37,7 +36,6 @@ G_DEFINE_TYPE(GrapheneSettingsPopup, graphene_settings_popup, CMK_TYPE_WIDGET)
 
 static void graphene_settings_popup_dispose(GObject *self_);
 static void graphene_settings_popup_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags);
-static void on_styles_changed(CmkWidget *self_, guint flags);
 static void on_logout_button_activate(CmkButton *button, GrapheneSettingsPopup *self);
 static void on_user_manager_notify_loaded(GrapheneSettingsPopup *self);
 static void on_panel_replace(GrapheneSettingsPopup *self, CmkWidget *replacement, CmkWidget *top);
@@ -57,18 +55,18 @@ static void graphene_settings_popup_class_init(GrapheneSettingsPopupClass *class
 {
 	G_OBJECT_CLASS(class)->dispose = graphene_settings_popup_dispose;
 	CLUTTER_ACTOR_CLASS(class)->allocate = graphene_settings_popup_allocate;
-	CMK_WIDGET_CLASS(class)->styles_changed = on_styles_changed;
 }
 
 static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
 {
-	self->sdc = cmk_shadow_new_full(CMK_SHADOW_MASK_LEFT | CMK_SHADOW_MASK_BOTTOM, 40);
-	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->sdc));
-
 	self->window = cmk_widget_new();
 	cmk_widget_set_draw_background_color(self->window, TRUE);
 	clutter_actor_set_reactive(CLUTTER_ACTOR(self->window), TRUE);
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->window));
+	
+	CmkShadowEffect *shadow = cmk_shadow_effect_new(20);
+	cmk_shadow_effect_set(shadow, 10, -10, 1, 10);
+	clutter_actor_add_effect(CLUTTER_ACTOR(self->window), CLUTTER_EFFECT(shadow));
 
 	self->infoBox = cmk_widget_new();
 	clutter_actor_set_layout_manager(CLUTTER_ACTOR(self->infoBox), clutter_vertical_box_new());
@@ -135,7 +133,6 @@ static void graphene_settings_popup_allocate(ClutterActor *self_, const ClutterA
 	width = MAX(box->x2-width, box->x1+(box->x2-box->x1)/2);
 
 	ClutterActorBox windowBox = {width, box->y1, box->x2, box->y2};
-	ClutterActorBox sdcBox = {windowBox.x1-40, windowBox.y1-40, windowBox.x2 + 40, box->y2 + 40};
 
 	gfloat infoMin, infoNat;
 	clutter_actor_get_preferred_height(CLUTTER_ACTOR(self->infoBox), width, &infoMin, &infoNat);
@@ -144,16 +141,10 @@ static void graphene_settings_popup_allocate(ClutterActor *self_, const ClutterA
 	ClutterActorBox scrollBox = {windowBox.x1, infoBox.y2, windowBox.x2, windowBox.y2};
 
 	clutter_actor_allocate(CLUTTER_ACTOR(self->window), &windowBox, flags);
-	clutter_actor_allocate(CLUTTER_ACTOR(self->sdc), &windowBox, flags);
 	clutter_actor_allocate(CLUTTER_ACTOR(self->infoBox), &infoBox, flags);
 	clutter_actor_allocate(CLUTTER_ACTOR(self->scroll), &scrollBox, flags);
 
 	CLUTTER_ACTOR_CLASS(graphene_settings_popup_parent_class)->allocate(self_, box, flags);
-}
-
-static void on_styles_changed(CmkWidget *self_, guint flags)
-{
-	CMK_WIDGET_CLASS(graphene_settings_popup_parent_class)->styles_changed(self_, flags);
 }
 
 static void on_logout_button_activate(CmkButton *button, GrapheneSettingsPopup *self)
@@ -164,10 +155,11 @@ static void on_logout_button_activate(CmkButton *button, GrapheneSettingsPopup *
 		return;
 	}
 	
-	// Don't destroy after delay, it doesn't look very good
-	clutter_actor_destroy(CLUTTER_ACTOR(self));
 	if(self->logoutCb)
 		self->logoutCb(self->cbUserdata);
+	
+	// Don't destroy after delay, it doesn't look very good
+	clutter_actor_destroy(CLUTTER_ACTOR(self));
 }
 
 static void on_user_updated(GrapheneSettingsPopup *self, ActUser *user)

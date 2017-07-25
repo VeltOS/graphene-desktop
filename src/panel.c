@@ -181,7 +181,7 @@ static void on_popup_destroy(CmkWidget *popup, GraphenePanel *self)
 		clutter_event_remove_filter(self->popupEventFilterId);
 	self->popupEventFilterId = 0;
 
-	cmk_focus_stack_pop(self->popup);
+	cmk_focus_stack_pop();
 	self->popup = NULL;
 	self->popupSource = NULL;
 }
@@ -362,6 +362,11 @@ void graphene_panel_update_window(GraphenePanel *self, GrapheneWindow *window)
 	if(button)
 	{
 		CmkWidget *content = cmk_button_get_content(button);
+		// TODO: Temporary, for VeltOS Installer
+		if(g_strcmp0(window->icon, "velt") == 0)
+			cmk_icon_set_icon_theme(CMK_ICON(content), "Velt");
+		else
+			cmk_icon_set_icon_theme(CMK_ICON(content), NULL);
 		cmk_icon_set_icon(CMK_ICON(content), window->icon);
 	}
 

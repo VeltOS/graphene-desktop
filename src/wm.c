@@ -323,16 +323,22 @@ static void graphene_window_update(GrapheneWindow *cwindow)
 {
 	MetaWindow *window = META_WINDOW(cwindow->window);
 	cwindow->title = meta_window_get_title(window);
-	g_free(cwindow->icon);
+	g_clear_pointer(&cwindow->icon, g_free);
 	
-	const gchar *icon = meta_window_get_wm_class(window);
-	if(!icon)
-		icon = meta_window_get_wm_class_instance(window);
-	if(!icon)
-		cwindow->icon = NULL;
-	else
-		cwindow->icon = g_utf8_strdown(icon, -1); // TODO: Should probably validate
+	CmkIconLoader *loader = cmk_icon_loader_get_default();
 
+	// TODO: Should probably validate g_utf8_strdown
+	if(!cwindow->icon)
+	{
+		cwindow->icon = g_utf8_strdown(meta_window_get_wm_class(window), -1);
+		if(!cmk_icon_loader_lookup(loader, cwindow->icon, 24))
+			g_clear_pointer(&cwindow->icon, g_free);
+	}
+	if(!cwindow->icon)
+		cwindow->icon = g_utf8_strdown(meta_window_get_wm_class_instance(window), -1);
+	if(!cwindow->icon)
+		cwindow->icon = g_strdup("");
+	
 	cwindow->flags = GRAPHENE_WINDOW_FLAG_NORMAL;
 	gboolean minimized, attention, focused, skip;
 	g_object_get(window,

@@ -8,6 +8,7 @@
 
 #include "panel-internal.h"
 #include <libcmk/cmk.h>
+#include <libcmk/cmk-icon-loader.h>
 #include <gdk/gdkx.h>
 #include <gmenu-tree.h>
 #include <gio/gdesktopappinfo.h>
@@ -243,14 +244,37 @@ static gboolean add_app(GrapheneLauncherPopup *self, GDesktopAppInfo *appInfo)
 	}
 	
 	CmkButton *button = cmk_button_new(CMK_BUTTON_TYPE_EMBED);
-	const gchar *iconName;
 	GIcon *gicon = g_app_info_get_icon(G_APP_INFO(appInfo));
+	CmkIcon *icon = NULL;
 	if(G_IS_THEMED_ICON(gicon))
 	{
 		const gchar * const * names = g_themed_icon_get_names(G_THEMED_ICON(gicon));
-		iconName = names[0];
+		icon = cmk_icon_new_from_name(names[0] ? names[0] : "", 24);
 	}
-	CmkIcon *icon = cmk_icon_new_from_name(iconName ? iconName : "open-menu-symbolic", 24);
+	else if(G_IS_FILE_ICON(gicon))
+	{
+		GFile *file = g_file_icon_get_file(G_FILE_ICON(gicon));
+		gchar *path = g_file_get_path(file);
+		if(path)
+		{
+			CmkIconLoader *loader = cmk_icon_loader_get_default();
+			cairo_surface_t *surf = cmk_icon_loader_load(loader, path, 24, CMK_DP(self, 1), TRUE);
+			icon = cmk_icon_new(24);
+			// TODO: Should probably make CmkIcon accept cairo_surface_t directly..
+			cmk_icon_set_pixmap(icon,
+				cairo_image_surface_get_data(surf),
+				cairo_image_surface_get_format(surf),
+				cairo_image_surface_get_width(surf),
+				1, 1);
+			g_free(path);
+		}
+	}
+	
+	if(!icon)
+	{
+		g_warning("Unhandled GIcon type %s on app '%s'", G_OBJECT_TYPE_NAME(gicon), g_app_info_get_display_name(G_APP_INFO(appInfo)));
+		icon = cmk_icon_new_from_name("", 24);
+	}
 	cmk_button_set_content(button, CMK_WIDGET(icon));
 	cmk_button_set_text(button, g_app_info_get_display_name(G_APP_INFO(appInfo)));
 	cmk_widget_set_style_parent(CMK_WIDGET(button), self->window);

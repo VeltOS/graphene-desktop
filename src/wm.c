@@ -73,8 +73,6 @@ extern void wm_request_logout(gpointer userdata);
 static void on_monitors_changed(MetaScreen *screen, GrapheneWM *self);
 static void update_struts(GrapheneWM *self);
 static void on_window_created(GrapheneWM *self, MetaWindow *window, MetaDisplay *display);
-static void reset_clutter_dpi();
-static void on_global_scale_changed(CmkIconLoader *iconLoader);
 static void xfixes_add_input_actor(GrapheneWM *self, ClutterActor *actor);
 static void xfixes_remove_input_actor(GrapheneWM *self, ClutterActor *actor);
 static void graphene_wm_begin_modal(GrapheneWM *self);
@@ -102,43 +100,61 @@ const MetaPluginInfo * graphene_wm_plugin_info(MetaPlugin *plugin)
 	return &info;
 }
 
-static gint requestedDPI = 1024 * 96;
-static gfloat requestedDPIScale = 1.0;
+static GSettings *interfaceSettings = NULL;
+static CmkWidget *style = NULL;
+static MetaScreen *screen = NULL;
 
-CmkWidget *style = NULL;
+static void update_cmk_scale_factor(void)
+{
+	guint scale = g_settings_get_uint(interfaceSettings, "scaling-factor");
+	if(scale > 0)
+	{
+		cmk_widget_set_dp_scale(style, scale);
+	}
+	else
+	{
+		MetaRectangle rect = meta_rect(0,0,0,0);
+		int primary = meta_screen_get_primary_monitor(screen);
+		meta_screen_get_monitor_geometry(screen, primary, &rect);
 
-//#include <math.h>
-//static gboolean sizewarp()
-//{
-//	static gfloat t = 0;
-//	t += 0.05;
-//	requestedDPIScale = 4 * fabs(sin(t));
-//	
-//	cmk_widget_set_dp_scale(style, requestedDPIScale);
-//	//g_object_set(clutter_settings_get_default(), "font-dpi", (gint)(requestedDPI * requestedDPIScale), NULL);
-//	
-//	return G_SOURCE_CONTINUE;
-//}
+		// Similar numbers to what gsd's xsettings uses
+		// for hidpi check but a lot more lazy
+		if(rect.height > 1200 || rect.width > 2100)
+			cmk_widget_set_dp_scale(style, 2);
+		else
+			cmk_widget_set_dp_scale(style, 1);
+	}
+}
+
+static void on_interface_settings_changed(GSettings *settings, const gchar *key)
+{
+	if(meta_is_wayland_compositor() && g_strcmp0(key, "font-name") == 0)
+	{
+		// Wayland clutter seems to not take the font-name property
+		// automatically
+		ClutterSettings *s = clutter_settings_get_default();
+		const gchar *font = g_settings_get_string(settings, key);
+		g_object_set(s, "font-name", font, NULL);
+	}
+	else if(g_strcmp0(key, "scaling-factor") == 0)
+	{
+		update_cmk_scale_factor();
+	}
+}
 
 void graphene_wm_start(MetaPlugin *self_)
 {
-	// Some stuff for DPI scaling
+	GrapheneWM *self = GRAPHENE_WM(self_);
+	screen = meta_plugin_get_screen(self_);
 	style = cmk_widget_new();
-	CmkIconLoader *iconLoader = cmk_icon_loader_get_default();
-
-	requestedDPIScale = cmk_icon_loader_get_scale(iconLoader);
-	cmk_widget_set_dp_scale(style, requestedDPIScale);
-	g_object_set(clutter_settings_get_default(), "font-dpi", (gint)(requestedDPI * requestedDPIScale), NULL);
-	g_signal_connect_after(clutter_get_default_backend(), "resolution-changed", G_CALLBACK(reset_clutter_dpi), NULL);
-	g_signal_connect(iconLoader, "notify::scale", G_CALLBACK(on_global_scale_changed), NULL);
 	
+	interfaceSettings = g_settings_new("org.gnome.desktop.interface");
+	g_signal_connect(interfaceSettings, "changed", G_CALLBACK(on_interface_settings_changed), NULL); 
+	on_interface_settings_changed(interfaceSettings, "font-name");
+	update_cmk_scale_factor();
+
 	cmk_set_grab_handler((CmkGrabHandler)on_cmk_grab, self_);
 
-	//g_timeout_add(50, sizewarp, NULL);	
-
-	GrapheneWM *self = GRAPHENE_WM(self_);
-
-	MetaScreen *screen = meta_plugin_get_screen(self_);
 	self->stage = meta_get_stage_for_screen(screen);
 
 	MetaDisplay *display = meta_screen_get_display(screen);
@@ -259,38 +275,8 @@ static void on_monitors_changed(MetaScreen *screen, GrapheneWM *self)
 
 	clutter_actor_set_position(ACTOR(self->notificationBox), primary.x, primary.y);
 	clutter_actor_set_size(ACTOR(self->notificationBox), primary.width, primary.height);
-}
 
-/*
- * From all my investigation into the API and source code, there appears to
- * be no way to interrupt Clutter's auto-detection of font dpi from the
- * current system. Ideally, font dpi could be a Cmk style property. However,
- * that would be very annoying and hacky to setup without creating a custom
- * version of ClutterText (which I don't want to do).
- * This method is called at the end of the Backend's resolution-chaged
- * emission, and checks to see if the resolution that has been set is the
- * one we want. If not, change it back.
- */
-static void reset_clutter_dpi()
-{
-	ClutterSettings *settings = clutter_settings_get_default();
-	gint dpi = 0;
-	g_object_get(settings, "font-dpi", &dpi, NULL);
-	gint dpiReq = requestedDPI * requestedDPIScale;
-	if(dpi != dpiReq)
-	{
-		// The setter for font-dpi scales the value by GDK_DPI_SCALE, which
-		// is very annoying. So just make sure that's unset. Whatever.
-		g_unsetenv("GDK_DPI_SCALE");
-		g_object_set(settings, "font-dpi", dpiReq, NULL);
-	}
-}
-
-static void on_global_scale_changed(CmkIconLoader *iconLoader)
-{
-	requestedDPIScale = cmk_icon_loader_get_scale(iconLoader);
-	cmk_widget_set_dp_scale(style, requestedDPIScale);
-	g_object_set(clutter_settings_get_default(), "font-dpi", (gint)(requestedDPI * requestedDPIScale), NULL);
+	update_cmk_scale_factor();
 }
 
 

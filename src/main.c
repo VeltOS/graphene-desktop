@@ -76,6 +76,10 @@ int main(int argc, char **argv)
 	fsync(fileno(stderr));
 #endif
 	
+	g_setenv("CLUTTER_SCALE", "1", TRUE);
+	ClutterSettings *settings = clutter_settings_get_default();
+	g_object_set(settings, "window-scaling-factor", 1, NULL);
+	
 	meta_plugin_manager_set_plugin_type(GRAPHENE_TYPE_WM);
 	meta_set_wm_name("GRAPHENE Desktop");
 	meta_set_gnome_wm_keybindings("Mutter,GNOME Shell");

@@ -7,7 +7,7 @@
 #ifndef __GRAPHENE_STATUS_NOTIFIER_HOST_H__
 #define __GRAPHENE_STATUS_NOTIFIER_HOST_H__
 
-#include <libcmk/cmk-widget.h>
+#include <cmk/cmk-widget.h>
 
 G_BEGIN_DECLS
 

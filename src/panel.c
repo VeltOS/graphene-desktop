@@ -6,7 +6,7 @@
  
 #include "panel.h"
 #include "panel-internal.h"
-#include <libcmk/cmk.h>
+#include <cmk/cmk.h>
 #include "csk/battery.h"
 #include "network.h"
 #include "status-icons.h"
@@ -86,7 +86,7 @@ static void graphene_panel_init(GraphenePanel *self)
 
 	// Launcher
 	self->launcher = cmk_button_new(CMK_BUTTON_TYPE_EMBED);
-	CmkIcon *launcherIcon = cmk_icon_new_full("velt", "Velt", PANEL_HEIGHT*2/3, TRUE);
+	CmkIcon *launcherIcon = cmk_icon_new_full("velt", "hicolor", PANEL_HEIGHT*2/3, TRUE);
 	cmk_widget_set_margin(CMK_WIDGET(launcherIcon), 8, 8, 0, 0);
 	cmk_button_set_content(self->launcher, CMK_WIDGET(launcherIcon));
 	g_signal_connect(self->launcher, "activate", G_CALLBACK(on_launcher_button_activate), self);
@@ -362,11 +362,6 @@ void graphene_panel_update_window(GraphenePanel *self, GrapheneWindow *window)
 	if(button)
 	{
 		CmkWidget *content = cmk_button_get_content(button);
-		// TODO: Temporary, for VeltOS Installer
-		if(g_strcmp0(window->icon, "velt") == 0)
-			cmk_icon_set_icon_theme(CMK_ICON(content), "Velt");
-		else
-			cmk_icon_set_icon_theme(CMK_ICON(content), NULL);
 		cmk_icon_set_icon(CMK_ICON(content), window->icon);
 	}
 

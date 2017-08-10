@@ -20,8 +20,8 @@
 #include "background.h"
 #include "dialog.h"
 #include "window.h"
-#include <libcmk/cmk.h>
-#include <libcmk/cmk-icon-loader.h>
+#include <cmk/cmk.h>
+#include <cmk/cmk-icon-loader.h>
 #include "csk/backlight.h"
 #include <meta/meta-shadow-factory.h>
 #include <meta/display.h>
@@ -35,16 +35,16 @@
 #define WM_TRANSITION_TIME 200 // Common transition time, ms
 #define ACTOR CLUTTER_ACTOR // I am lazy
 
-static const ClutterColor GrapheneColors[] = {
-	{73, 86, 92, 255}, // background (panel)
-	{255, 255, 255, 204}, // foreground (font)
-	{255, 255, 255, 40}, // hover
-	{255, 255, 255, 25}, // selected
-	{0, 0, 0, 180}, // shadow
+static const CmkNamedColor GrapheneColors[] = {
+	{"background", {73,  86, 92, 255}},
+	{"foreground", {255, 255, 255, 204}},
+	{"primary",    {171, 59,  63,  255}}, // vosred, normally #D02727, but shaded to background to #ab3b3f
+	{"hover",      {255, 255, 255, 40}},
+	{"selected",   {255, 255, 255, 25}},
+	{"error",      {120, 0,   0,   220}},
+	{"shadow",     {0,   0,   0,   180}},
+	NULL
 };
-
-static const float GrapheneBevelRadius = 3.0;
-static const float GraphenePadding = 10.0;
 
 /*
  * From what I can tell, the current version of Clutter has a memory leak
@@ -171,11 +171,7 @@ void graphene_wm_start(MetaPlugin *self_)
 	// TODO: Load styling from a file
 	// cmk_stlye_get_default gets a new ref here, which we never release to
 	// ensure all widgets get the same default style.
-	cmk_widget_set_named_color(style, "background", &GrapheneColors[0]);
-	cmk_widget_set_named_color(style, "foreground", &GrapheneColors[1]);
-	cmk_widget_set_named_color(style, "hover", &GrapheneColors[2]);
-	cmk_widget_set_named_color(style, "selected", &GrapheneColors[3]);
-	cmk_widget_set_named_color(style, "shadow", &GrapheneColors[4]);
+	cmk_widget_set_named_colors(style, GrapheneColors);
 
 	// Background is always below all other actors
 	ClutterActor *backgroundGroup = meta_background_group_new();

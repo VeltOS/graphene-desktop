@@ -29,7 +29,7 @@ pkg_check_modules(LIBPULSEGLIB REQUIRED libpulse-mainloop-glib>=8.0)
 pkg_check_modules(POLKITAGENT REQUIRED polkit-agent-1)
 pkg_check_modules(LIBGNOMEMENU REQUIRED libgnome-menu-3.0>=3.13)
 pkg_check_modules(LIBACT REQUIRED accountsservice>=0.6)
-pkg_check_modules(LIBCMK REQUIRED libcmk>=0.3)
+pkg_check_modules(LIBCMK REQUIRED libcmk>=0.5)
 link_directories(${LIBMUTTER_LIBRARY_DIRS})
 
 add_executable(graphene-desktop
@@ -63,14 +63,19 @@ add_executable(graphene-desktop
 )
 target_link_libraries(graphene-desktop
 	SegFault
+	m
 	${GIOUNIX2_LIBRARIES}
 	${LIBMUTTER_LIBRARIES}
 	${LIBPULSEGLIB_LIBRARIES}
 	${POLKITAGENT_LIBRARIES}
 	${LIBGNOMEMENU_LIBRARIES}
 	${LIBACT_LIBRARIES}
+	# Cmk includes its own statically linked version of Clutter
+	# which makes backend-specific changes for desktop apps.
+	# libmutter also has its own version of Clutter, so make
+	# sure to include Cmk AFTER libmutter, so that the Mutter
+	# version is used.
 	${LIBCMK_LIBRARIES}
-	m
 )
 target_include_directories(graphene-desktop PRIVATE
 	${CMAKE_CURRENT_BINARY_DIR}

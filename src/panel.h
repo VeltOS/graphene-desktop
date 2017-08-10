@@ -7,7 +7,7 @@
 #ifndef __GRAPHENE_PANEL_H__
 #define __GRAPHENE_PANEL_H__
 
-#include <libcmk/cmk-widget.h>
+#include <cmk/cmk-widget.h>
 #include "window.h"
 
 G_BEGIN_DECLS

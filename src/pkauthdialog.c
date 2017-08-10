@@ -19,6 +19,7 @@
 #define THIS_ERROR_QUARK g_quark_from_static_string("GRAPHENE_PKAUTHDIALOG_ERROR")
 
 #include "pkauthdialog.h"
+#include <cmk/cmk.h>
 #include <polkitagent/polkitagent.h>
 
 typedef enum
@@ -39,7 +40,7 @@ struct _GraphenePKAuthDialog
 	gchar *cookie;
 	GList *identities;
 	PolkitAgentSession *agentSession;
-	ClutterText *responseField;
+	CmkTextfield *responseField;
 	PkState state;
 };
 
@@ -94,17 +95,15 @@ GraphenePKAuthDialog * graphene_pk_auth_dialog_new(const gchar *actionId, const 
 	else
 		graphene_dialog_set_icon(GRAPHENE_DIALOG(self), self->iconName);
 
-	ClutterText *passwordBox = CLUTTER_TEXT(clutter_text_new());
+	CmkTextfield *passwordBox = cmk_textfield_new("Password", NULL);
+	cmk_textfield_set_is_password(passwordBox, TRUE);
+	cmk_widget_set_margin(CMK_WIDGET(passwordBox), 15, 30, 0, 0);
 	clutter_actor_set_x_expand(CLUTTER_ACTOR(passwordBox), TRUE);
 	clutter_actor_set_y_align(CLUTTER_ACTOR(passwordBox), CLUTTER_ACTOR_ALIGN_CENTER);
-	clutter_text_set_password_char(passwordBox, 8226);
-	clutter_text_set_activatable(passwordBox, TRUE);
-	clutter_text_set_editable(passwordBox, TRUE);
-	clutter_actor_set_reactive(CLUTTER_ACTOR(passwordBox), TRUE);
 	self->responseField = passwordBox;
 	graphene_dialog_set_content(GRAPHENE_DIALOG(self), CLUTTER_ACTOR(passwordBox));
 
-	g_signal_connect_swapped(passwordBox, "activate", G_CALLBACK(on_activate), self);
+	g_signal_connect_swapped(passwordBox, "activate-enter", G_CALLBACK(on_activate), self);
 	g_signal_connect(passwordBox, "notify::mapped", G_CALLBACK(grab_focus_on_map), NULL);
 
 	on_select_identity(self, NULL); // TEMP
@@ -182,14 +181,14 @@ static void on_option_selected(GrapheneDialog *self_, const gchar *selection)
 	GraphenePKAuthDialog *self = GRAPHENE_PK_AUTH_DIALOG(self_);
 
 	if(g_strcmp0(selection, "Authenticate") == 0)
-		pk_respond(self, clutter_text_get_text(self->responseField));
+		pk_respond(self, cmk_textfield_get_text(self->responseField));
 	else
 		pk_cancel(self);
 }
 
 static gboolean on_activate(GraphenePKAuthDialog *self, ClutterButtonEvent *event, gpointer userdata)
 {
-	pk_respond(self, clutter_text_get_text(self->responseField));
+	pk_respond(self, cmk_textfield_get_text(self->responseField));
 }
 
 static void on_select_identity(GraphenePKAuthDialog *self, gpointer userdata)

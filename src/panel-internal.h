@@ -7,8 +7,8 @@
 #ifndef __GRAPHENE_PANEL_INTERNAL_H__
 #define __GRAPHENE_PANEL_INTERNAL_H__
 
-#include <libcmk/cmk-widget.h>
-#include <libcmk/cmk-label.h>
+#include <cmk/cmk-widget.h>
+#include <cmk/cmk-label.h>
 
 G_BEGIN_DECLS
 

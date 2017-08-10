@@ -6,7 +6,7 @@
 
 #include "settings-panels.h"
 #include "../csk/network.h"
-#include <libcmk/cmk.h>
+#include <cmk/cmk.h>
 
 struct _GrapheneNetworkPanel
 {

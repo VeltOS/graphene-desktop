@@ -7,8 +7,8 @@
 #define GMENU_I_KNOW_THIS_IS_UNSTABLE // TODO: Maybe find an alternative? 
 
 #include "panel-internal.h"
-#include <libcmk/cmk.h>
-#include <libcmk/cmk-icon-loader.h>
+#include <cmk/cmk.h>
+#include <cmk/cmk-icon-loader.h>
 #include <gdk/gdkx.h>
 #include <gmenu-tree.h>
 #include <gio/gdesktopappinfo.h>

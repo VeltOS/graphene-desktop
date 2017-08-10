@@ -5,7 +5,7 @@
  */
 
 #include "notifications.h"
-#include <libcmk/cmk.h>
+#include <cmk/cmk.h>
 #include <notifications-dbus-iface.h>
 
 #define NOTIFICATION_DEFAULT_SHOW_TIME 5000 // ms

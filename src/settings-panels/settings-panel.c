@@ -5,7 +5,7 @@
  */
 
 #include "settings-panels.h"
-#include <libcmk/cmk.h>
+#include <cmk/cmk.h>
 
 struct _GrapheneSettingsPanel
 {

@@ -10,7 +10,7 @@
 #ifndef __GRAPHENE_DIALOG_H__
 #define __GRAPHENE_DIALOG_H__
 
-#include <libcmk/cmk.h>
+#include <cmk/cmk.h>
 
 G_BEGIN_DECLS
 

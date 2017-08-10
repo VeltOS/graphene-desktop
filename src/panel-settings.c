@@ -5,7 +5,7 @@
  */
 
 #include "panel-internal.h"
-#include <libcmk/cmk.h>
+#include <cmk/cmk.h>
 #include <act/act.h>
 #include "settings-panels/settings-panels.h"
 

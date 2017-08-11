@@ -49,6 +49,7 @@ GrapheneSettingsPopup * graphene_settings_popup_new(CSettingsLogoutCallback logo
 		popup->logoutCb = logoutCb;
 		popup->cbUserdata = userdata;
 	}
+	return popup;
 }
 
 static void graphene_settings_popup_class_init(GrapheneSettingsPopupClass *class)
@@ -156,7 +157,7 @@ static void graphene_settings_popup_allocate(ClutterActor *self_, const ClutterA
 	CLUTTER_ACTOR_CLASS(graphene_settings_popup_parent_class)->allocate(self_, box, flags);
 }
 
-static void on_logout_button_activate(CmkButton *button, GrapheneSettingsPopup *self)
+static void on_logout_button_activate(UNUSED CmkButton *button, GrapheneSettingsPopup *self)
 {
 	if(g_list_length(self->panelStack) > 1)
 	{

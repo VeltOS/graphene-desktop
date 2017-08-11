@@ -159,7 +159,7 @@ void graphene_session_init(CSMStartupCompleteCallback startupCb, CSMDialogCallba
 	g_bus_get(G_BUS_TYPE_SESSION, session->cancel, on_ebus_connection_acquired, NULL);
 }
 
-static void on_ybus_connection_acquired(GObject *source, GAsyncResult *res, gpointer userdata)
+static void on_ybus_connection_acquired(UNUSED GObject *source, GAsyncResult *res, UNUSED gpointer userdata)
 {
 	GError *error = NULL;
 	GDBusConnection *yBus = g_bus_get_finish(res, &error);
@@ -191,7 +191,7 @@ static void on_ybus_connection_acquired(GObject *source, GAsyncResult *res, gpoi
 		NULL);
 }
 
-static void on_logind_session_acquired(GDBusConnection *yBus, GAsyncResult *res, gpointer userdata)
+static void on_logind_session_acquired(GDBusConnection *yBus, GAsyncResult *res, UNUSED gpointer userdata)
 {
 	GError *error = NULL;
 	GVariant *ret = g_dbus_connection_call_finish(yBus, res, &error);
@@ -254,7 +254,7 @@ static void on_logind_session_acquired(GDBusConnection *yBus, GAsyncResult *res,
 		NULL);
 }
 
-static void on_polkit_auth_agent_registered(GDBusConnection *yBus, GAsyncResult *res, gpointer userdata)
+static void on_polkit_auth_agent_registered(GDBusConnection *yBus, GAsyncResult *res, UNUSED gpointer userdata)
 {
 	GError *error = NULL;
 	GVariant *ret = g_dbus_connection_call_finish(yBus, res, &error);
@@ -276,7 +276,7 @@ static void on_polkit_auth_agent_registered(GDBusConnection *yBus, GAsyncResult 
 	}
 }
 
-static void on_ebus_connection_acquired(GObject *source, GAsyncResult *res, gpointer userdata)
+static void on_ebus_connection_acquired(UNUSED GObject *source, GAsyncResult *res, UNUSED gpointer userdata)
 {
 	GError *error = NULL;
 	GDBusConnection *eBus = g_bus_get_finish(res, &error);
@@ -318,7 +318,7 @@ static void on_ebus_connection_acquired(GObject *source, GAsyncResult *res, gpoi
 		NULL);
 }
 
-static void on_eybus_connection_lost(GDBusConnection *eyBus, gboolean remotePeerVanished, GError *error, gpointer userdata)
+static void on_eybus_connection_lost(UNUSED GDBusConnection *eyBus, UNUSED gboolean remotePeerVanished, UNUSED GError *error, UNUSED gpointer userdata)
 {
 	g_critical("Lost connecion to the Session or System DBus.");
 	g_clear_object(&session->yBus);
@@ -326,7 +326,7 @@ static void on_eybus_connection_lost(GDBusConnection *eyBus, gboolean remotePeer
 	graphene_session_exit(TRUE);
 }
 
-static void on_dbus_name_acquired(GDBusConnection *eBus, const gchar *name, void *userdata)
+static void on_dbus_name_acquired(UNUSED GDBusConnection *eBus, UNUSED const gchar *name, UNUSED void *userdata)
 {
 	session->hasName = TRUE;
 	g_message("Acquired name '%s' on the Session DBus", SESSION_DBUS_NAME);
@@ -338,7 +338,7 @@ static void on_dbus_name_acquired(GDBusConnection *eBus, const gchar *name, void
 	}
 }
 
-static void on_dbus_name_lost(GDBusConnection *eBus, const gchar *name, void *userdata)
+static void on_dbus_name_lost(UNUSED GDBusConnection *eBus, UNUSED const gchar *name, UNUSED void *userdata)
 {
 	// Not necessarily fatal if the name is lost but connection isn't, so
 	// keep the session alive. No new clients will be able to register, but
@@ -468,7 +468,7 @@ void graphene_session_request_logout()
 	session->dialogCb(CLUTTER_ACTOR(dialog), session->cbUserdata);
 }
 
-static void on_logout_dialog_close(GrapheneDialog *dialog, const gchar *button)
+static void on_logout_dialog_close(UNUSED GrapheneDialog *dialog, const gchar *button)
 {
 	session->dialogCb(NULL, session->cbUserdata);
 	if(g_strcmp0(button, "Suspend") == 0)
@@ -489,12 +489,12 @@ void notify_inhibitors()
 	else if(session->exitType == EXIT_REBOOT)
 		type = "restart";
 	gchar *msg = g_strdup_printf("An application is blocking %s. Force %s?", type, type);
-	GrapheneDialog *dialog = graphene_dialog_new_simple(type, NULL, "Cancel", "Force", NULL);
+	GrapheneDialog *dialog = graphene_dialog_new_simple(msg, NULL, "Cancel", "Force", NULL);
 	g_signal_connect(dialog, "select", G_CALLBACK(on_inhibitors_dialog_close), NULL);
 	session->dialogCb(CLUTTER_ACTOR(dialog), session->cbUserdata);
 }
 
-static void on_inhibitors_dialog_close(GrapheneDialog *dialog, const gchar *button)
+static void on_inhibitors_dialog_close(UNUSED GrapheneDialog *dialog, const gchar *button)
 {
 	session->dialogCb(NULL, session->cbUserdata);
 	if(g_strcmp0(button, "Force") == 0)
@@ -683,7 +683,7 @@ static GrapheneSessionClient * find_client_from_given_info(const gchar *id, cons
 	return NULL;
 }
 
-static gboolean on_client_register(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *appId, const gchar *startupId, gpointer userdata)
+static gboolean on_client_register(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *appId, const gchar *startupId, UNUSED gpointer userdata)
 {
 	const gchar *sender = g_dbus_method_invocation_get_sender(invocation);
 	GrapheneSessionClient *client = find_client_from_given_info(startupId, NULL, appId, sender);
@@ -722,7 +722,7 @@ static void on_client_notify_ready(GrapheneSessionClient *client)
 	check_startup_complete();
 }
 
-static gboolean on_client_unregister(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *clientObjectPath, gpointer userdata)
+static gboolean on_client_unregister(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *clientObjectPath, UNUSED gpointer userdata)
 {
 	GrapheneSessionClient *client = find_client_from_given_info(NULL, clientObjectPath, NULL, NULL);
 	if(client)
@@ -888,7 +888,7 @@ static void launch_autostart(GDesktopAppInfo *desktopInfo)
  * Session Inhibition
  */
 
-static gboolean on_client_inhibit(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *appId, guint toplevelXId, const gchar *reason, guint flags, gpointer userdata)
+static gboolean on_client_inhibit(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *appId, UNUSED guint toplevelXId, const gchar *reason, guint flags, UNUSED gpointer userdata)
 {
 	const gchar *sender = g_dbus_method_invocation_get_sender(invocation);
 	GrapheneSessionClient *client = find_client_from_given_info(NULL, NULL, appId, NULL);
@@ -916,7 +916,7 @@ static gboolean on_client_inhibit(DBusSessionManager *object, GDBusMethodInvocat
 	return TRUE;
 }
 
-static gboolean on_client_uninhibit(DBusSessionManager *object, GDBusMethodInvocation *invocation, guint cookie, gpointer userdata)
+static gboolean on_client_uninhibit(DBusSessionManager *object, GDBusMethodInvocation *invocation, guint cookie, UNUSED gpointer userdata)
 {
 	// Try to remove from each client
 	for(GList *it = session->clients; it != NULL; it = it->next)
@@ -932,7 +932,7 @@ static gboolean on_client_uninhibit(DBusSessionManager *object, GDBusMethodInvoc
  * Other DBus Commands
  */
 
-static gboolean on_dbus_set_env(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *variable, const gchar *value, gpointer userdata)
+static gboolean on_dbus_set_env(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *variable, const gchar *value, UNUSED gpointer userdata)
 {
 	// Setting environment variables isn't really useful after the startup phase
 	if(session && session->phase <= SESSION_PHASE_STARTUP)
@@ -951,14 +951,14 @@ static gboolean on_dbus_set_env(DBusSessionManager *object, GDBusMethodInvocatio
 	return TRUE;
 }
 
-static gboolean on_dbus_get_locale(DBusSessionManager *object, GDBusMethodInvocation *invocation, gint category, gpointer userdata)
+static gboolean on_dbus_get_locale(UNUSED DBusSessionManager *object, UNUSED GDBusMethodInvocation *invocation, UNUSED gint category, UNUSED gpointer userdata)
 {
 	// TODO
 	//dbus_session_manager_complete_get_locale(object, invocation, "");
 	return FALSE;
 }
 
-static gboolean on_dbus_initialization_error(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *message, gboolean fatal, gpointer userdata)
+static gboolean on_dbus_initialization_error(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *message, gboolean fatal, UNUSED gpointer userdata)
 {
 	if(fatal && session->phase <= SESSION_PHASE_STARTUP)
 	{
@@ -974,7 +974,7 @@ static gboolean on_dbus_initialization_error(DBusSessionManager *object, GDBusMe
 	return TRUE;
 }
 
-static gboolean on_dbus_client_relaunch(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *name, gpointer userdata)
+static gboolean on_dbus_client_relaunch(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *name, UNUSED gpointer userdata)
 {
 	GrapheneSessionClient *client = find_client_from_given_info(name, name, name, name);
 	if(client)
@@ -983,14 +983,14 @@ static gboolean on_dbus_client_relaunch(DBusSessionManager *object, GDBusMethodI
 	return FALSE;
 }
 
-static gboolean on_dbus_is_inhibited(DBusSessionManager *object, GDBusMethodInvocation *invocation, gint flags, gpointer userdata)
+// TODO
+UNUSED static gboolean on_dbus_is_inhibited(DBusSessionManager *object, GDBusMethodInvocation *invocation, UNUSED gint flags, UNUSED gpointer userdata)
 {
-	// TODO
 	dbus_session_manager_complete_is_inhibited(object, invocation, 0);
 	return TRUE;
 }
 
-static gboolean on_dbus_get_current_client(DBusSessionManager *object, GDBusMethodInvocation *invocation, gpointer userdata)
+static gboolean on_dbus_get_current_client(DBusSessionManager *object, GDBusMethodInvocation *invocation, UNUSED gpointer userdata)
 {
 	const gchar *sender = g_dbus_method_invocation_get_sender(invocation);
 	GrapheneSessionClient *client = find_client_from_given_info(NULL, NULL, NULL, sender);
@@ -1006,7 +1006,7 @@ static gboolean on_dbus_get_current_client(DBusSessionManager *object, GDBusMeth
 	return TRUE;
 }
 
-static gboolean on_dbus_get_clients(DBusSessionManager *object, GDBusMethodInvocation *invocation, gpointer userdata)
+static gboolean on_dbus_get_clients(DBusSessionManager *object, GDBusMethodInvocation *invocation, UNUSED gpointer userdata)
 {
 	guint count = 0;
 	for(GList *clients=session->clients;clients!=NULL;clients=clients->next)
@@ -1033,49 +1033,49 @@ static gboolean on_dbus_get_clients(DBusSessionManager *object, GDBusMethodInvoc
 	return TRUE;
 }
 
-static gboolean on_dbus_get_inhibitors(DBusSessionManager *object, GDBusMethodInvocation *invocation, gpointer userdata)
+static gboolean on_dbus_get_inhibitors(UNUSED DBusSessionManager *object, UNUSED GDBusMethodInvocation *invocation, UNUSED gpointer userdata)
 {
 	// TODO
 	//dbus_session_manager_complete_get_inhibitors(object, invocation);
 	return FALSE;
 }
 
-static gboolean on_dbus_get_is_autostart_condition_handled(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *condition, gpointer userdata)
+static gboolean on_dbus_get_is_autostart_condition_handled(DBusSessionManager *object, GDBusMethodInvocation *invocation, UNUSED const gchar *condition, UNUSED gpointer userdata)
 {
 	// TODO: What is the format for 'condition'?
 	dbus_session_manager_complete_is_autostart_condition_handled(object, invocation, FALSE);
 	return TRUE;
 }
 
-static gboolean on_dbus_shutdown(DBusSessionManager *object, GDBusMethodInvocation *invocation, gpointer userdata)
+static gboolean on_dbus_shutdown(DBusSessionManager *object, GDBusMethodInvocation *invocation, UNUSED gpointer userdata)
 {
 	dbus_session_manager_complete_shutdown(object, invocation);
 	do_exit(EXIT_SHUTDOWN, FALSE);
 	return TRUE;
 }
 
-static gboolean on_dbus_reboot(DBusSessionManager *object, GDBusMethodInvocation *invocation, gpointer userdata)
+static gboolean on_dbus_reboot(DBusSessionManager *object, GDBusMethodInvocation *invocation, UNUSED gpointer userdata)
 {
 	dbus_session_manager_complete_reboot(object, invocation);
 	do_exit(EXIT_REBOOT, FALSE);
 	return TRUE;
 }
 
-static gboolean on_dbus_get_can_shutdown(DBusSessionManager *object, GDBusMethodInvocation *invocation, gpointer userdata)
+static gboolean on_dbus_get_can_shutdown(DBusSessionManager *object, GDBusMethodInvocation *invocation, UNUSED gpointer userdata)
 {
 	// TODO: Return based on inhibition status
 	dbus_session_manager_complete_can_shutdown(object, invocation, TRUE);
 	return TRUE;
 }
 
-static gboolean on_dbus_logout(DBusSessionManager *object, GDBusMethodInvocation *invocation, gint mode, gpointer userdata)
+static gboolean on_dbus_logout(DBusSessionManager *object, GDBusMethodInvocation *invocation, UNUSED gint mode, UNUSED gpointer userdata)
 {
 	dbus_session_manager_complete_logout(object, invocation);
 	graphene_session_request_logout();
 	return TRUE;
 }
 
-static gboolean on_dbus_get_is_session_running(DBusSessionManager *object, GDBusMethodInvocation *invocation, gpointer userdata)
+static gboolean on_dbus_get_is_session_running(DBusSessionManager *object, GDBusMethodInvocation *invocation, UNUSED gpointer userdata)
 {
 	gboolean running = session && session->phase == SESSION_PHASE_IDLE;
 	dbus_session_manager_complete_is_session_running(object, invocation, running);
@@ -1127,7 +1127,7 @@ static void connect_dbus_methods()
  * polkitagent library.
  */
 
-static void on_pk_auth_dialog_complete(GraphenePKAuthDialog *dialog, gboolean cancelled, gboolean gainedAuthentication, gpointer userdata)
+static void on_pk_auth_dialog_complete(GraphenePKAuthDialog *dialog, gboolean cancelled, UNUSED gboolean gainedAuthentication, gpointer userdata)
 {
 	session->pkAuthDialogList = g_list_remove(session->pkAuthDialogList, dialog);
 	
@@ -1151,11 +1151,11 @@ static void on_pk_auth_dialog_complete(GraphenePKAuthDialog *dialog, gboolean ca
 		session->dialogCb(CLUTTER_ACTOR(session->pkAuthDialogList->data), session->cbUserdata);
 }
 
-static gboolean on_pk_agent_begin_authentication(DBusPolkitAuthAgent *object, GDBusMethodInvocation *invocation, const gchar *actionId, const gchar *message, const gchar *iconName, GVariant *details, const gchar *cookie, GVariant *identitiesV)
+static gboolean on_pk_agent_begin_authentication(UNUSED DBusPolkitAuthAgent *object, GDBusMethodInvocation *invocation, const gchar *actionId, const gchar *message, const gchar *iconName, UNUSED GVariant *details, const gchar *cookie, GVariant *identitiesV)
 {
 	if(!session->dialogCb)
 	{
-		g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "");
+		g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Unknown error");
 		return TRUE;
 	}
 
@@ -1177,8 +1177,9 @@ static gboolean on_pk_agent_begin_authentication(DBusPolkitAuthAgent *object, GD
 	return TRUE;
 }
 
-static gboolean on_pk_agent_cancel_authentication(DBusPolkitAuthAgent *object, GDBusMethodInvocation *invocation, const gchar *cookie)
+static gboolean on_pk_agent_cancel_authentication(DBusPolkitAuthAgent *object, GDBusMethodInvocation *invocation, UNUSED const gchar *cookie)
 {
+	// TODO: Validate cookie
 	if(session && session->pkAuthDialogList && session->pkAuthDialogList->data)
 		graphene_pk_auth_dialog_cancel(session->pkAuthDialogList->data);
 

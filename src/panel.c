@@ -8,7 +8,6 @@
 #include "panel-internal.h"
 #include <cmk/cmk.h>
 #include "csk/battery.h"
-#include "network.h"
 #include "status-icons.h"
 #include "status-notifier-host.h"
 
@@ -140,7 +139,6 @@ static void graphene_panel_allocate(ClutterActor *self_, const ClutterActorBox *
 	gfloat height = box->y2 - box->y1;
 	
 	gfloat panelHeight = CMK_DP(self_, PANEL_HEIGHT);
-	gfloat shadowSize = SHADOW_SIZE * cmk_widget_get_padding_multiplier(CMK_WIDGET(self_));
 	ClutterActorBox barBox = {0, height-panelHeight, width, height};
 	ClutterActorBox popupBox = {0, 0, width, barBox.y1};
 
@@ -170,12 +168,12 @@ ClutterActor * graphene_panel_get_input_actor(GraphenePanel *self)
 	return CLUTTER_ACTOR(self->bar);
 }
 
-GraphenePanelSide graphene_panel_get_side(GraphenePanel *panel)
+GraphenePanelSide graphene_panel_get_side(UNUSED GraphenePanel *panel)
 {
 	return GRAPHENE_PANEL_SIDE_BOTTOM;
 }
 
-static void on_popup_destroy(CmkWidget *popup, GraphenePanel *self)
+static void on_popup_destroy(UNUSED CmkWidget *popup, GraphenePanel *self)
 {
 	if(self->popupEventFilterId)
 		clutter_event_remove_filter(self->popupEventFilterId);
@@ -290,7 +288,7 @@ static void on_tasklist_button_activate(CmkButton *button, GraphenePanel *self)
 		window->minimize(window);
 }
 
-static void on_tasklist_button_allocation_changed(CmkButton *button, ClutterActorBox *box, ClutterAllocationFlags flags, GrapheneWindow *window)
+static void on_tasklist_button_allocation_changed(CmkButton *button, UNUSED ClutterActorBox *box, UNUSED ClutterAllocationFlags flags, GrapheneWindow *window)
 {
 	gfloat x, y, width, height;
 	clutter_actor_get_transformed_position(CLUTTER_ACTOR(button), &x, &y);

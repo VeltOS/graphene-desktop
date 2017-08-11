@@ -129,8 +129,6 @@ static void graphene_launcher_popup_allocate(ClutterActor *self_, const ClutterA
 {
 	GrapheneLauncherPopup *self = GRAPHENE_LAUNCHER_POPUP(self_);
 
-	float sDepth = CMK_DP(self_, 20);
-	
 	gfloat width = CMK_DP(self_, LAUNCHER_WIDTH);
 	ClutterActorBox windowBox = {box->x1, box->y1, MIN(box->x1 + width, box->x2/2), box->y2};
 
@@ -187,7 +185,7 @@ static void on_search_box_text_changed(GrapheneLauncherPopup *self, ClutterText 
 	//clutter_scroll_actor_scroll_to_point(self->scroll, &p);
 }
 
-static void on_search_box_activate(GrapheneLauncherPopup *self, ClutterText *searchBox)
+static void on_search_box_activate(GrapheneLauncherPopup *self, UNUSED ClutterText *searchBox)
 {
 	if(!self->filter || g_utf8_strlen(self->filter, -1) == 0)
 		return;

@@ -55,7 +55,7 @@ static guint signals[SIGNAL_LAST];
 static void graphene_pk_auth_dialog_dispose(GObject *self_);
 static void on_option_selected(GrapheneDialog *self_, const gchar *selection);
 static void on_select_identity(GraphenePKAuthDialog *self, gpointer userdata);
-static gboolean on_activate(GraphenePKAuthDialog *self, ClutterButtonEvent *event, gpointer userdata);
+static void on_activate(GraphenePKAuthDialog *self, ClutterButtonEvent *event, gpointer userdata);
 static void on_auth_agent_completed(PolkitAgentSession *agentSession, gboolean gainedAuthorization, gpointer userdata);
 static void on_auth_agent_request(PolkitAgentSession *agentSession, gchar *request, gboolean echoOn, gpointer userdata);
 static void on_auth_agent_show_error(PolkitAgentSession *agentSession, gchar *text, gpointer userdata);
@@ -186,12 +186,12 @@ static void on_option_selected(GrapheneDialog *self_, const gchar *selection)
 		pk_cancel(self);
 }
 
-static gboolean on_activate(GraphenePKAuthDialog *self, ClutterButtonEvent *event, gpointer userdata)
+static void on_activate(GraphenePKAuthDialog *self, UNUSED ClutterButtonEvent *event, UNUSED gpointer userdata)
 {
 	pk_respond(self, cmk_textfield_get_text(self->responseField));
 }
 
-static void on_select_identity(GraphenePKAuthDialog *self, gpointer userdata)
+static void on_select_identity(GraphenePKAuthDialog *self, UNUSED gpointer userdata)
 {
 	pk_cancel(self);
 	// TODO: Get selected identity
@@ -211,7 +211,7 @@ static void on_select_identity(GraphenePKAuthDialog *self, gpointer userdata)
 	#undef connect
 }
 
-static void on_auth_agent_completed(PolkitAgentSession *agentSession, gboolean gainedAuthorization, gpointer userdata)
+static void on_auth_agent_completed(UNUSED PolkitAgentSession *agentSession, gboolean gainedAuthorization, gpointer userdata)
 {
 	g_return_if_fail(GRAPHENE_IS_PK_AUTH_DIALOG(userdata));
 	GraphenePKAuthDialog *self = GRAPHENE_PK_AUTH_DIALOG(userdata);
@@ -222,19 +222,21 @@ static void on_auth_agent_completed(PolkitAgentSession *agentSession, gboolean g
 	// TODO: Try multiple times?
 }
 
-static void on_auth_agent_request(PolkitAgentSession *agentSession, gchar *request, gboolean echoOn, gpointer userdata)
+static void on_auth_agent_request(UNUSED PolkitAgentSession *agentSession, gchar *request, gboolean echoOn, gpointer userdata)
 {
 	g_message("Request: %s (echo: %i)", request, echoOn);
 	GRAPHENE_PK_AUTH_DIALOG(userdata)->state = PK_STATE_WAITING;
 }
 
-static void on_auth_agent_show_error(PolkitAgentSession *agentSession, gchar *text, gpointer userdata)
+static void on_auth_agent_show_error(UNUSED PolkitAgentSession *agentSession, gchar *text, UNUSED gpointer userdata)
 {
+	// TODO: Display to user
 	g_warning("Authentication error: %s", text);
 }
 
-static void on_auth_agent_show_info(PolkitAgentSession *agentSession, gchar *text, gpointer userdata)
+static void on_auth_agent_show_info(UNUSED PolkitAgentSession *agentSession, gchar *text, UNUSED gpointer userdata)
 {
+	// TODO: Display to user
 	g_warning("Authentication info: %s", text);
 }
 

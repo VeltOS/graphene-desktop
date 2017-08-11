@@ -102,7 +102,7 @@ static void ndevice_group_class_init(NDeviceGroupClass *class)
 	G_OBJECT_CLASS(class)->dispose = ndevice_group_dispose;
 }
 
-static void ndevice_group_init(NDeviceGroup *self)
+static void ndevice_group_init(UNUSED NDeviceGroup *self)
 {
 }
 
@@ -120,7 +120,7 @@ static void nap_button_class_init(NApButtonClass *class)
 	G_OBJECT_CLASS(class)->dispose = nap_button_dispose;
 }
 
-static void nap_button_init(NApButton *self)
+static void nap_button_init(UNUSED NApButton *self)
 {
 }
 
@@ -200,7 +200,7 @@ static void on_primary_device_changed(GrapheneNetworkPanel *self)
 	}
 }
 
-static void on_device_name_changed(NDeviceGroup *group, GParamSpec *spec, CskNetworkDevice *device)
+static void on_device_name_changed(NDeviceGroup *group, UNUSED GParamSpec *spec, CskNetworkDevice *device)
 {
 	const gchar *name = csk_network_device_get_name(device);
 	cmk_label_set_text(group->label, name);
@@ -211,7 +211,7 @@ static void on_best_changed(CskNetworkAccessPoint *ap, GParamSpec *spec, CmkButt
 static void on_name_changed(CskNetworkAccessPoint *ap, GParamSpec *spec, CmkButton *button);
 static void on_icon_changed(CskNetworkAccessPoint *ap, GParamSpec *spec, CmkButton *button);
 
-static void on_ap_added(CmkWidget *group, CskNetworkAccessPoint *ap, CskNetworkDevice *device)
+static void on_ap_added(CmkWidget *group, CskNetworkAccessPoint *ap, UNUSED CskNetworkDevice *device)
 {
 	const gchar *icon = csk_network_access_point_get_icon(ap);
 	
@@ -249,7 +249,7 @@ static void on_ap_removed(CmkWidget *group, CskNetworkAccessPoint *ap)
 	}
 }
 
-static void on_active_ap_changed(CmkWidget *group, GParamSpec *spec, CskNetworkDevice *device)
+static void on_active_ap_changed(CmkWidget *group, UNUSED GParamSpec *spec, CskNetworkDevice *device)
 {
 	CskNetworkAccessPoint *activeAp = csk_network_device_get_active_access_point(device);
 	
@@ -270,7 +270,7 @@ static void on_active_ap_changed(CmkWidget *group, GParamSpec *spec, CskNetworkD
 	}
 }
 
-static void on_best_changed(CskNetworkAccessPoint *ap, GParamSpec *spec, CmkButton *button)
+static void on_best_changed(CskNetworkAccessPoint *ap, UNUSED GParamSpec *spec, CmkButton *button)
 {
 	if(csk_network_access_point_is_best(ap))
 		clutter_actor_show(CLUTTER_ACTOR(button));
@@ -278,7 +278,7 @@ static void on_best_changed(CskNetworkAccessPoint *ap, GParamSpec *spec, CmkButt
 		clutter_actor_hide(CLUTTER_ACTOR(button));
 }
 
-static void on_name_changed(CskNetworkAccessPoint *ap, GParamSpec *spec, CmkButton *button)
+static void on_name_changed(CskNetworkAccessPoint *ap, UNUSED GParamSpec *spec, CmkButton *button)
 {
 	const gchar *name = csk_network_access_point_get_name(ap);
 	if(!name)
@@ -288,7 +288,7 @@ static void on_name_changed(CskNetworkAccessPoint *ap, GParamSpec *spec, CmkButt
 	cmk_button_set_text(button, name);
 }
 
-static void on_icon_changed(CskNetworkAccessPoint *ap, GParamSpec *spec, CmkButton *button)
+static void on_icon_changed(CskNetworkAccessPoint *ap, UNUSED GParamSpec *spec, CmkButton *button)
 {
 	const gchar *icon = csk_network_access_point_get_icon(ap);
 	CmkIcon *content = CMK_ICON(cmk_button_get_content(button));

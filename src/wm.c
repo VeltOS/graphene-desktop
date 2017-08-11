@@ -43,7 +43,7 @@ static const CmkNamedColor GrapheneColors[] = {
 	{"selected",   {255, 255, 255, 25}},
 	{"error",      {120, 0,   0,   220}},
 	{"shadow",     {0,   0,   0,   180}},
-	NULL
+	{NULL}
 };
 
 /*
@@ -87,7 +87,7 @@ static void map_done(ClutterActor *actor, MetaPlugin *plugin);
 
 static void init_keybindings(GrapheneWM *self);
 
-const MetaPluginInfo * graphene_wm_plugin_info(MetaPlugin *plugin)
+const MetaPluginInfo * graphene_wm_plugin_info(UNUSED MetaPlugin *plugin)
 {
 	static const MetaPluginInfo info = {
 		.name = "Graphene WM Manager",
@@ -355,14 +355,14 @@ static void graphene_window_connect(GrapheneWindow *cwindow, GrapheneWindowNotif
 	g_signal_connect_swapped(window, "notify::wm-class", G_CALLBACK(callback), cwindow);
 }
 
-static void on_window_destroyed(GrapheneWindow *cwindow, MetaWindow *window)
+static void on_window_destroyed(GrapheneWindow *cwindow, UNUSED MetaWindow *window)
 {
 	graphene_panel_remove_window(GRAPHENE_WM(cwindow->wm)->panel, cwindow);
 	g_free(cwindow->icon);
 	g_free(cwindow);
 }
 
-static void on_window_created(GrapheneWM *self, MetaWindow *window, MetaDisplay *display)
+static void on_window_created(GrapheneWM *self, MetaWindow *window, UNUSED MetaDisplay *display)
 {
 	GrapheneWindow *cwindow = g_new0(GrapheneWindow, 1);
 	cwindow->wm = self;
@@ -410,7 +410,7 @@ static void update_struts(GrapheneWM *self)
 	clutter_actor_get_position(bar, &x, &y);
 	clutter_actor_get_size(bar, &width, &height);
 
-	MetaStrut strut = {x, y, width, height, side};
+	MetaStrut strut = {{x, y, width, height}, side};
 	GSList *struts = NULL;
 	if(width > 0 && height > 0)	
 		struts = g_slist_append(NULL, &strut);
@@ -606,7 +606,7 @@ static void graphene_wm_close_dialog(GrapheneWM *self, gboolean closeCover)
 	TRANSITION_MEMLEAK_FIX(self->coverGroup, "opacity");
 }
 
-static void on_dialog_size_changed(ClutterActor *dialog, GParamSpec *param, GrapheneWM *self)
+static void on_dialog_size_changed(ClutterActor *dialog, UNUSED GParamSpec *param, GrapheneWM *self)
 {
 	center_actor_on_primary(self, dialog);
 }
@@ -841,7 +841,7 @@ static void map_done(ClutterActor *actor, MetaPlugin *plugin)
  * Keybindings
  */
 
-static void on_key_volume_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+static void on_key_volume_up(UNUSED MetaDisplay *display, UNUSED MetaScreen *screen, UNUSED MetaWindow *window, ClutterKeyEvent *event, UNUSED MetaKeyBinding *binding, GrapheneWM *self)
 {
 	CskAudioDevice *device = csk_audio_device_manager_get_default_output(self->audioManager);
 
@@ -863,7 +863,7 @@ static void on_key_volume_up(MetaDisplay *display, MetaScreen *screen, MetaWindo
 	csk_audio_device_set_volume(device, vol);
 }
 
-static void on_key_volume_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+static void on_key_volume_down(UNUSED MetaDisplay *display, UNUSED MetaScreen *screen, UNUSED MetaWindow *window, ClutterKeyEvent *event, UNUSED MetaKeyBinding *binding, GrapheneWM *self)
 {
 	CskAudioDevice *device = csk_audio_device_manager_get_default_output(self->audioManager);
 
@@ -885,7 +885,7 @@ static void on_key_volume_down(MetaDisplay *display, MetaScreen *screen, MetaWin
 	csk_audio_device_set_volume(device, vol);
 }
 
-static void on_key_volume_mute(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+static void on_key_volume_mute(UNUSED MetaDisplay *display, UNUSED MetaScreen *screen, UNUSED MetaWindow *window, UNUSED ClutterKeyEvent *event, UNUSED MetaKeyBinding *binding, GrapheneWM *self)
 {
 	CskAudioDevice *device = csk_audio_device_manager_get_default_output(self->audioManager);
 
@@ -900,37 +900,37 @@ static void on_key_volume_mute(MetaDisplay *display, MetaScreen *screen, MetaWin
 	csk_audio_device_set_muted(device, newMute);
 }
 
-static void on_key_backlight_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+static void on_key_backlight_up(UNUSED MetaDisplay *display, UNUSED MetaScreen *screen, UNUSED MetaWindow *window, UNUSED ClutterKeyEvent *event, UNUSED MetaKeyBinding *binding, GrapheneWM *self)
 {
-	float stepSize = 1.0/WM_PERCENT_BAR_STEPS;
 	gfloat val = csk_backlight_set_brightness(1.0/WM_PERCENT_BAR_STEPS, TRUE);
 	if(val < 0)
 		val = 1;
 	graphene_percent_floater_set_percent(self->percentBar, val);
 }
 
-static void on_key_backlight_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+static void on_key_backlight_down(UNUSED MetaDisplay *display, UNUSED MetaScreen *screen, UNUSED MetaWindow *window, UNUSED ClutterKeyEvent *event, UNUSED MetaKeyBinding *binding, GrapheneWM *self)
 {
-	float stepSize = 1.0/WM_PERCENT_BAR_STEPS;
 	gfloat val = csk_backlight_set_brightness(-1.0/WM_PERCENT_BAR_STEPS, TRUE);
 	if(val < 0)
 		val = 1;
 	graphene_percent_floater_set_percent(self->percentBar, val);
 }
 
-static void on_key_kb_backlight_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+static void on_key_kb_backlight_up(UNUSED MetaDisplay *display, UNUSED MetaScreen *screen, UNUSED MetaWindow *window, UNUSED ClutterKeyEvent *event, UNUSED MetaKeyBinding *binding, UNUSED GrapheneWM *self)
 {
+	// TODO
 }
 
 // TODO: TEMP
 extern gboolean graphene_session_exit(gboolean failed);
 
-static void on_key_kb_backlight_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+static void on_key_kb_backlight_down(UNUSED MetaDisplay *display, UNUSED MetaScreen *screen, UNUSED MetaWindow *window, UNUSED ClutterKeyEvent *event, UNUSED MetaKeyBinding *binding, UNUSED GrapheneWM *self)
 {
 	graphene_session_exit(TRUE);
+	// TODO
 }
 
-static void on_panel_main_menu(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+static void on_panel_main_menu(UNUSED MetaDisplay *display, UNUSED MetaScreen *screen, UNUSED MetaWindow *window, UNUSED ClutterKeyEvent *event, UNUSED MetaKeyBinding *binding, GrapheneWM *self)
 {
 	graphene_panel_show_main_menu(self->panel);
 }

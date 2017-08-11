@@ -65,7 +65,7 @@ GrapheneWMBackground* graphene_wm_background_new(MetaScreen *screen, guint monit
 		NULL));
 }
 
-static void graphene_wm_background_init(GrapheneWMBackground *self) {}
+static void graphene_wm_background_init(UNUSED GrapheneWMBackground *self) {}
 
 static void graphene_wm_background_constructed(GObject *self_)
 {
@@ -84,7 +84,7 @@ static void graphene_wm_background_dispose(GObject *gobject)
 	G_OBJECT_CLASS(graphene_wm_background_parent_class)->dispose(gobject);
 }
 
-static void graphene_wm_background_set_property(GObject *self, guint propertyId, const GValue *value, GParamSpec *pspec)
+static void graphene_wm_background_set_property(GObject *self, guint propertyId, const GValue *value, UNUSED GParamSpec *pspec)
 {
 	g_return_if_fail(GRAPHENE_IS_WM_BACKGROUND(self));
 	if(propertyId == PROP_SCREEN)
@@ -93,7 +93,7 @@ static void graphene_wm_background_set_property(GObject *self, guint propertyId,
 		GRAPHENE_WM_BACKGROUND(self)->monitor = g_value_get_int(value);
 }
 
-static void graphene_wm_background_get_property(GObject *self, guint propertyId, GValue *value, GParamSpec *pspec) {}
+static void graphene_wm_background_get_property(UNUSED GObject *self, UNUSED guint propertyId, UNUSED GValue *value, UNUSED GParamSpec *pspec) {}
 
 static void update_done(ClutterActor *newActor, GrapheneWMBackground *self)
 {

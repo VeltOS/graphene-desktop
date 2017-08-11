@@ -18,7 +18,10 @@
 static gboolean backlight_command(const gchar *command, const gchar *value, gchar **stdout, gint *exitCode)
 {
 	const gchar *argv[] = {"pkexec", BH_EXEC, command, value, NULL};
-	return g_spawn_sync(NULL, command != BH_SET ? (gchar **)&argv[1] : (gchar **)argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, stdout, NULL, exitCode, NULL);
+	return g_spawn_sync(NULL,
+		// Don't use pkexec if this is not a set- command
+		((void*)command != (void*)BH_SET) ? (gchar **)&argv[1] : (gchar **)argv,
+		NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, stdout, NULL, exitCode, NULL);
 }
 
 static gint64 get_max_backlight(void)
@@ -58,7 +61,7 @@ static gint64 get_backlight(void)
 
 static gboolean set_backlight(gint64 val)
 {
-	gchar *sval = g_strdup_printf("%lli", val);
+	gchar *sval = g_strdup_printf("%li", val);
 	gint exitCode;
 	gboolean r = backlight_command(BH_SET, sval, NULL, &exitCode);
 	g_free(sval);
@@ -105,10 +108,12 @@ gfloat csk_backlight_set_brightness(gfloat value, gboolean relative)
 
 gfloat csk_keyboard_backlight_get_brightness(void)
 {
+	// TODO
 	return 0;
 }
 
-gfloat csk_keyboard_backlight_set_brightness(gfloat value, gboolean relative)
+gfloat csk_keyboard_backlight_set_brightness(UNUSED gfloat value, UNUSED gboolean relative)
 {
+	// TODO
 	return 0;
 }

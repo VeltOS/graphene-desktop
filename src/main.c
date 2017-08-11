@@ -124,7 +124,7 @@ static void graphene_wm_init(GrapheneWM *wm)
 	g_unix_signal_add(SIGHUP, (GSourceFunc)on_exit_signal, NULL);
 }
 
-static gboolean on_exit_signal(gpointer userdata)
+static gboolean on_exit_signal(UNUSED gpointer userdata)
 {
 	g_warning("SIGTERM/INT/HUP. Aborting.");
 	graphene_session_exit(TRUE);
@@ -143,14 +143,14 @@ static void on_show_dialog(ClutterActor *dialog, gpointer userdata)
 	graphene_wm_show_dialog(GRAPHENE_WM(userdata), dialog);
 }
 
-static void on_session_quit(gboolean failed, gpointer userdata)
+static void on_session_quit(gboolean failed, UNUSED gpointer userdata)
 {
 	g_message("SM has completed %s. Exiting mutter.", failed ? "with an error" : "successfully");
 	meta_quit(failed ? META_EXIT_ERROR : META_EXIT_SUCCESS);
 }
 
 // Called directly from wm.c (extern)
-void wm_request_logout(gpointer userdata)
+void wm_request_logout(UNUSED gpointer userdata)
 {
 	graphene_session_request_logout();
 }

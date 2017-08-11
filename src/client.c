@@ -688,7 +688,7 @@ void graphene_session_client_unregister(GrapheneSessionClient *self)
  * Called when a registered client's DBus connection vanishes.
  * This is effectively the same as the process exiting, and therefore the client should be removed.
  */ 
-static void on_client_vanished(GDBusConnection *connection, const gchar *name, GrapheneSessionClient *self)
+static void on_client_vanished(UNUSED GDBusConnection *connection, UNUSED const gchar *name, GrapheneSessionClient *self)
 {
 	if(!self)
 		return;
@@ -733,8 +733,6 @@ static void destroy_client_info(GrapheneSessionClient *self)
  */
 static void on_client_exit(GrapheneSessionClient *self, guint status)
 {
-	gboolean wasRegistered = self->objectPath != NULL;
-	
 	// Make sure on_client_exit can't be called twice (once from dbus, once from child watch)
 	// Also unregisters the client
 	destroy_client_info(self);
@@ -1046,7 +1044,7 @@ static gboolean on_dbus_restart(DBusSessionManagerClient *object, GDBusMethodInv
 	return TRUE;
 }
 
-static gboolean on_dbus_end_session_response(DBusSessionManagerClientPrivate *object, GDBusMethodInvocation *invocation, gboolean isOk, const gchar *reason, GrapheneSessionClient *self)
+static gboolean on_dbus_end_session_response(DBusSessionManagerClientPrivate *object, GDBusMethodInvocation *invocation, gboolean isOk, UNUSED const gchar *reason, GrapheneSessionClient *self)
 {
 	g_return_val_if_fail(GRAPHENE_IS_SESSION_CLIENT(self), FALSE);
 	g_message("response: %i (%s)", isOk, graphene_session_client_get_best_name(self));

@@ -121,7 +121,7 @@ static void graphene_status_notifier_host_dispose(GObject *self_)
 	G_OBJECT_CLASS(graphene_status_notifier_host_parent_class)->dispose(self_);
 }
 
-static void on_watcher_proxy_ready(GObject *source, GAsyncResult *res, GrapheneStatusNotifierHost *self)
+static void on_watcher_proxy_ready(UNUSED GObject *source, GAsyncResult *res, GrapheneStatusNotifierHost *self)
 {
 	self->dbusWatcherProxy = dbus_freedesktop_status_notifier_watcher_proxy_new_finish(res, NULL);
 	if(!self->dbusWatcherProxy)
@@ -134,18 +134,18 @@ static void on_watcher_proxy_ready(GObject *source, GAsyncResult *res, GrapheneS
 	tryRegisterHost(self);
 }
 
-static void on_watcher_proxy_owner_changed(GrapheneStatusNotifierHost *self, GParamSpec *spec, DBusFreedesktopStatusNotifierWatcher *proxy)
+static void on_watcher_proxy_owner_changed(GrapheneStatusNotifierHost *self, UNUSED GParamSpec *spec, UNUSED DBusFreedesktopStatusNotifierWatcher *proxy)
 {
 	tryRegisterHost(self);
 }
 
-static void on_host_name_acquired(GDBusConnection *connection, const gchar *name, GrapheneStatusNotifierHost *self)
+static void on_host_name_acquired(UNUSED GDBusConnection *connection, UNUSED const gchar *name, GrapheneStatusNotifierHost *self)
 {
 	self->ownsName = TRUE;
 	tryRegisterHost(self);
 }
 
-static void on_host_name_lost(GDBusConnection *connection, const gchar *name, GrapheneStatusNotifierHost *self)
+static void on_host_name_lost(UNUSED GDBusConnection *connection, UNUSED const gchar *name, GrapheneStatusNotifierHost *self)
 {
 	self->ownsName = FALSE;
 	tryRegisterHost(self);
@@ -242,23 +242,23 @@ static void on_item_registered(GrapheneStatusNotifierHost *self, const gchar *se
 	item_update_icon(item->connection, NULL, NULL, STATUSNOTIFIER_KDE_ITEM_DBUS_IFACE, NULL, NULL, item);
 }
 
-static void on_item_unregistered(GrapheneStatusNotifierHost *self, const gchar *service, DBusFreedesktopStatusNotifierWatcher *proxy)
+static void on_item_unregistered(GrapheneStatusNotifierHost *self, const gchar *service, UNUSED DBusFreedesktopStatusNotifierWatcher *proxy)
 {
 	g_hash_table_remove(self->items, service);
 }
 
-static void on_icon_style_changed(CmkIcon *icon, StatusNotifierItem *item)
+static void on_icon_style_changed(UNUSED CmkIcon *icon, StatusNotifierItem *item)
 {
 	item_update_icon(item->connection, NULL, NULL, STATUSNOTIFIER_ITEM_DBUS_IFACE, NULL, NULL, item);
 	item_update_icon(item->connection, NULL, NULL, STATUSNOTIFIER_KDE_ITEM_DBUS_IFACE, NULL, NULL, item);
 }
 
 static void item_update_icon(GDBusConnection *connection,
-	const gchar *senderName,
-	const gchar *objectPath,
+	UNUSED const gchar *senderName,
+	UNUSED const gchar *objectPath,
 	const gchar *interfaceName,
-	const gchar *signalName,
-	GVariant *parameters,
+	UNUSED const gchar *signalName,
+	UNUSED GVariant *parameters,
 	StatusNotifierItem *item)
 {
 	if(!item)
@@ -429,7 +429,6 @@ guchar * icon_variant_array_to_best_icon(GVariant *variant, guint sizeRequest, g
 	if(*oFrames == 0)
 		return NULL;
 	
-	gboolean vCenter = (bestWidth < bestHeight);
 	guint frameSize = (*oSize)*(*oSize)*4;
 	guint dataLen = frameSize*(*oFrames);
 	guchar *data = g_new0(guchar, dataLen);
@@ -453,15 +452,15 @@ guchar * icon_variant_array_to_best_icon(GVariant *variant, guint sizeRequest, g
 			if(numBytes > frameSize)
 				continue;
 		
-			guint stride = width*4;
+			//guint stride = width*4;
 
 			guint j=0;
 			guchar byte=0;
 			while(g_variant_iter_loop(byteIter, "y", &byte))
 			{
-				guint row = j/stride;
-				guint col = j%stride;
 				// TODO: Center in square
+				//guint row = j/stride;
+				//guint col = j%stride;
 				//data[frameSize*i + row*(*oSize) + col] = byte;
 				data[frameSize*i + j] = byte;
 				j++;
@@ -488,7 +487,7 @@ guchar * icon_variant_array_to_best_icon(GVariant *variant, guint sizeRequest, g
 	return data;
 }
 
-static void on_item_activate(CmkButton *button, StatusNotifierItem *item)
+static void on_item_activate(UNUSED CmkButton *button, StatusNotifierItem *item)
 {
 	const ClutterEvent *event = clutter_get_current_event();
 	if(clutter_event_type(event) != CLUTTER_BUTTON_RELEASE)
@@ -531,7 +530,7 @@ static void on_item_activate(CmkButton *button, StatusNotifierItem *item)
 	}
 }
 
-static gboolean on_item_scroll(CmkButton *button, const ClutterEvent *event, StatusNotifierItem *item)
+static gboolean on_item_scroll(UNUSED CmkButton *button, const ClutterEvent *event, StatusNotifierItem *item)
 {
 	if(clutter_event_type(event) != CLUTTER_SCROLL)
 		return TRUE;

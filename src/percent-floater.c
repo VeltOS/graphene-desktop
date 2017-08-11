@@ -37,7 +37,7 @@ GraphenePercentFloater * graphene_percent_floater_new(void)
 	return GRAPHENE_PERCENT_FLOATER(g_object_new(GRAPHENE_TYPE_PERCENT_FLOATER, NULL));
 }
 
-static void graphene_percent_floater_class_init(GraphenePercentFloaterClass *class)
+static void graphene_percent_floater_class_init(UNUSED GraphenePercentFloaterClass *class)
 {
 }
 
@@ -76,7 +76,7 @@ static void update_bar(GraphenePercentFloater *self)
 	clutter_actor_set_size(self->inner, innerWidth*self->percent, innerHeight);
 
 	clutter_actor_remove_all_children(self->inner);
-	for(int i=0;i<self->divisions;++i)
+	for(guint i=0;i<self->divisions;++i)
 	{
 		ClutterActor *div = clutter_actor_new();
 		clutter_actor_add_child(self->inner, div);

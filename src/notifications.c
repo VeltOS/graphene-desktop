@@ -151,7 +151,7 @@ static void post_server_fail_notification(GrapheneNotificationBox *self)
 	add_notification(self, n);
 }
 
-static void on_dbus_connection_acquired(GDBusConnection *connection, const gchar *name, GrapheneNotificationBox *self)
+static void on_dbus_connection_acquired(GDBusConnection *connection, G_GNUC_UNUSED const gchar *name, GrapheneNotificationBox *self)
 {
 	self->dbusObject = dbus_notifications_skeleton_new();
 	if(!g_dbus_interface_skeleton_export(G_DBUS_INTERFACE_SKELETON(self->dbusObject), connection, NOTIFICATION_DBUS_PATH, NULL))
@@ -163,18 +163,18 @@ static void on_dbus_connection_acquired(GDBusConnection *connection, const gchar
 	g_signal_connect_swapped(self->dbusObject, "handle-get-server-information", G_CALLBACK(on_dbus_call_get_server_information), self);
 }
 
-static void on_dbus_name_acquired(GDBusConnection *connection, const gchar *name, GrapheneNotificationBox *self)
+static void on_dbus_name_acquired(G_GNUC_UNUSED GDBusConnection *connection, UNUSED const gchar *name, GrapheneNotificationBox *self)
 {
 	remove_server_fail_notification(self);
 }
 
-static void on_dbus_name_lost(GDBusConnection *connection, const gchar *name, GrapheneNotificationBox *self)
+static void on_dbus_name_lost(UNUSED GDBusConnection *connection, UNUSED const gchar *name, GrapheneNotificationBox *self)
 {
 	post_server_fail_notification(self);
 }
 
 
-static gboolean on_dbus_call_get_capabilities(GrapheneNotificationBox *self, GDBusMethodInvocation *invocation, DBusNotifications *object)
+static gboolean on_dbus_call_get_capabilities(UNUSED GrapheneNotificationBox *self, GDBusMethodInvocation *invocation, DBusNotifications *object)
 {
 	const gchar * const capabilities[] = {"body", "persistance", "body-markup", NULL};
 	dbus_notifications_complete_get_capabilities(object, invocation, capabilities);
@@ -183,13 +183,13 @@ static gboolean on_dbus_call_get_capabilities(GrapheneNotificationBox *self, GDB
 
 static gboolean on_dbus_call_notify(GrapheneNotificationBox *self,
 	GDBusMethodInvocation *invocation,
-	const gchar *app_name,
-	guint replaces_id,
+	UNUSED const gchar *app_name, // TODO
+	UNUSED guint replaces_id, // TODO
 	const gchar *app_icon,
 	const gchar *summary,
 	const gchar *body,
-	const gchar * const *actions,
-	GVariant *hints,
+	UNUSED const gchar * const *actions, // TODO
+	UNUSED GVariant *hints, // TODO
 	gint expire_timeout,
 	DBusNotifications *object)
 {
@@ -225,7 +225,7 @@ static gboolean on_dbus_call_close_notification(GrapheneNotificationBox *self, G
 #define GRAPHENE_VERSION_STR ""
 #endif
 
-static gboolean on_dbus_call_get_server_information(GrapheneNotificationBox *self, GDBusMethodInvocation *invocation, DBusNotifications *object)
+static gboolean on_dbus_call_get_server_information(UNUSED GrapheneNotificationBox *self, UNUSED GDBusMethodInvocation *invocation, DBusNotifications *object)
 {
 	dbus_notifications_complete_get_server_information(object,
 		invocation,
@@ -376,19 +376,19 @@ static void graphene_notification_allocate(ClutterActor *self_, const ClutterAct
 	return CLUTTER_ACTOR_CLASS(graphene_notification_parent_class)->allocate(self_, box, flags);
 }
 
-static gboolean graphene_notification_press(ClutterActor *self_, ClutterButtonEvent *event)
+static gboolean graphene_notification_press(ClutterActor *self_, UNUSED ClutterButtonEvent *event)
 {
 	remove_notification(GRAPHENE_NOTIFICATION(self_));
 	return TRUE;
 }
 
-static gboolean graphene_notification_enter(ClutterActor *self_, ClutterCrossingEvent *event)
+static gboolean graphene_notification_enter(ClutterActor *self_, UNUSED ClutterCrossingEvent *event)
 {
 	graphene_notification_stop_timeout(GRAPHENE_NOTIFICATION(self_));
 	return TRUE;
 }
 
-static gboolean graphene_notification_leave(ClutterActor *self_, ClutterCrossingEvent *event)
+static gboolean graphene_notification_leave(ClutterActor *self_, UNUSED ClutterCrossingEvent *event)
 {
 	graphene_notification_set_timeout(GRAPHENE_NOTIFICATION(self_), GRAPHENE_NOTIFICATION(self_)->timeout);
 	return TRUE;

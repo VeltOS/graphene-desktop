@@ -362,14 +362,14 @@ static void on_styles_changed(CmkWidget *self_, guint flags)
 	}
 }
 
-static void on_size_changed(ClutterActor *self, GParamSpec *spec, ClutterCanvas *canvas)
+static void on_size_changed(ClutterActor *self, UNUSED GParamSpec *spec, ClutterCanvas *canvas)
 {
 	gfloat width, height;
 	clutter_actor_get_size(self, &width, &height);
 	clutter_canvas_set_size(CLUTTER_CANVAS(canvas), width, height);
 }
 
-static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, int height, GrapheneDialog *self)
+static gboolean on_draw_canvas(UNUSED ClutterCanvas *canvas, cairo_t *cr, int width, int height, GrapheneDialog *self)
 {
 	double radius = BEVEL_RADIUS*cmk_widget_get_bevel_radius_multiplier(CMK_WIDGET(self));
 	double degrees = M_PI / 180.0;
@@ -391,7 +391,7 @@ static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, in
 	return TRUE;
 }
 
-static gboolean on_dialog_captured_event(ClutterActor *actor, ClutterEvent *event, GrapheneDialog *self)
+static gboolean on_dialog_captured_event(UNUSED ClutterActor *actor, ClutterEvent *event, GrapheneDialog *self)
 {
 	if(!PRIVATE(self)->allowEsc)
 		return FALSE;

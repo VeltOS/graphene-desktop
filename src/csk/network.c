@@ -126,7 +126,6 @@ static guint managerSignals[MN_SIGNAL_LAST];
 static GParamSpec *deviceProperties[DV_PROP_LAST];
 static guint deviceSignals[DV_SIGNAL_LAST];
 static GParamSpec *apProperties[AP_PROP_LAST];
-static guint apSignals[AP_SIGNAL_LAST];
 
 G_DEFINE_TYPE(CskNetworkManager, csk_network_manager, G_TYPE_OBJECT)
 G_DEFINE_TYPE(CskNetworkDevice, csk_network_device, G_TYPE_OBJECT)
@@ -251,13 +250,13 @@ static void csk_network_manager_get_property(GObject *self_, guint propertyId, G
 // error, and will likely cause neither daemon to work properly as both
 // fight for control. If this happens, CskNetwork will just stop doing
 // anything until the secondary daemon(s) are disabled.
-static gboolean multiple_network_daemons_available(CskNetworkManager *self)
+UNUSED static gboolean multiple_network_daemons_available(UNUSED CskNetworkManager *self)
 {
 	// Currently only NetworkManager is checked, so there can't be multiple
 	return FALSE;
 }
 
-static void on_nm_daemon_appeared(GDBusConnection *connection, const gchar *name, const gchar *owner, CskNetworkManager *self)
+static void on_nm_daemon_appeared(GDBusConnection *connection, UNUSED const gchar *name, const gchar *owner, CskNetworkManager *self)
 {
 	g_debug("nm daemon appeared");
 	csk_network_manager_remove_all_devices(self, TRUE);
@@ -292,7 +291,7 @@ static void on_nm_daemon_appeared(GDBusConnection *connection, const gchar *name
 		self);
 }
 
-static void on_nm_daemon_vanished(GDBusConnection *connection, const gchar *name, CskNetworkManager *self)
+static void on_nm_daemon_vanished(GDBusConnection *connection, UNUSED const gchar *name, CskNetworkManager *self)
 {
 	self->connection = connection;
 	g_dbus_connection_signal_unsubscribe(connection, self->nmSignalSubId); 
@@ -333,7 +332,7 @@ static void on_nm_daemon_get_properties(GDBusConnection *connection, GAsyncResul
 }
 
 // All interfaces on the daemon object
-static void on_nm_daemon_signal(GDBusConnection *connection,
+static void on_nm_daemon_signal(UNUSED GDBusConnection *connection,
 	const gchar *sender,
 	const gchar *object,
 	const gchar *interface,
@@ -896,7 +895,7 @@ static void on_nm_device_get_properties(GDBusConnection *connection, GAsyncResul
 }
 
 // All interfaces on the device object
-static void on_nm_device_signal(GDBusConnection *connection,
+static void on_nm_device_signal(UNUSED GDBusConnection *connection,
 	const gchar *sender,
 	const gchar *object,
 	const gchar *interface,
@@ -1280,7 +1279,7 @@ CskNConnectionStatus csk_network_device_get_connection_status(CskNetworkDevice *
 	return self->status;
 }
 
-GArray * csk_network_device_get_ips(CskNetworkDevice *self)
+GArray * csk_network_device_get_ips(UNUSED CskNetworkDevice *self)
 {
 	return NULL;
 }
@@ -1333,7 +1332,6 @@ CskNetworkAccessPoint * csk_network_device_get_active_access_point(CskNetworkDev
  */
 
 static void csk_network_access_point_dispose(GObject *self_);
-static void csk_network_access_point_set_property(GObject *self_, guint propertyId, const GValue *value, GParamSpec *pspec);
 static void csk_network_access_point_get_property(GObject *self_, guint propertyId, GValue *value, GParamSpec *pspec);
 static void on_nm_wifi_ap_get_properties(GDBusConnection *connection, GAsyncResult *res, CskNetworkAccessPoint *self);
 static void on_nm_wifi_ap_signal(GDBusConnection *connection, const gchar *sender, const gchar *object, const gchar *interface, const gchar *signal, GVariant *parameters, CskNetworkAccessPoint *self);
@@ -1476,6 +1474,7 @@ static void csk_network_access_point_get_property(GObject *self_, guint property
 		break;
 	case AP_PROP_BEST:
 		g_value_set_boolean(value, self->best);
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(self_, propertyId, pspec);
 		break;
@@ -1548,7 +1547,7 @@ static void on_nm_wifi_ap_get_properties(GDBusConnection *connection, GAsyncResu
 }
 
 // Only for org.freedesktop.DBus.Properties interface
-static void on_nm_wifi_ap_signal(GDBusConnection *connection,
+static void on_nm_wifi_ap_signal(UNUSED GDBusConnection *connection,
 	const gchar *sender,
 	const gchar *object,
 	const gchar *interface,
@@ -1801,7 +1800,7 @@ const gchar * csk_network_access_point_get_icon(CskNetworkAccessPoint *self)
 	return self->icon;
 }
 
-void csk_network_access_point_connect(CskNetworkAccessPoint *self)
+void csk_network_access_point_connect(UNUSED CskNetworkAccessPoint *self)
 {
 	// TODO
 }

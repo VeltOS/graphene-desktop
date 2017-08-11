@@ -59,7 +59,7 @@ static void graphene_status_notifier_watcher_class_init(GrapheneStatusNotifierWa
 	G_OBJECT_CLASS(class)->dispose = graphene_status_notifier_watcher_dispose;
 }
 
-static void on_get_bus_connection(GObject *source, GAsyncResult *res, gpointer userdata)
+static void on_get_bus_connection(UNUSED GObject *source, GAsyncResult *res, gpointer userdata)
 {
 	GrapheneStatusNotifierWatcher *self = GRAPHENE_STATUS_NOTIFIER_WATCHER(userdata);
 
@@ -182,7 +182,7 @@ static void update_item_list(GrapheneStatusNotifierWatcher *self)
 	g_strfreev(list);
 }
 
-static void on_item_vanished(GDBusConnection *connection, const gchar *name, GrapheneStatusNotifierWatcher *self)
+static void on_item_vanished(UNUSED GDBusConnection *connection, const gchar *name, GrapheneStatusNotifierWatcher *self)
 {
 	remove_item(self, name);
 }
@@ -221,7 +221,7 @@ static gboolean on_dbus_call_register_host(GrapheneStatusNotifierWatcher *self, 
 	return TRUE;
 }
 
-static void on_host_vanished(GDBusConnection *connection, const gchar *name, GrapheneStatusNotifierWatcher *self)
+static void on_host_vanished(UNUSED GDBusConnection *connection, const gchar *name, GrapheneStatusNotifierWatcher *self)
 {
 	remove_host(self, name);
 }

@@ -12,13 +12,6 @@ struct _GrapheneSettingsPanel
 	CmkWidget parent;
 };
 
-enum
-{
-	SIGNAL_LAST
-};
-
-static guint signals[SIGNAL_LAST];
-
 static void enum_settings_widgets(GrapheneSettingsPanel *self);
 
 G_DEFINE_TYPE(GrapheneSettingsPanel, graphene_settings_panel, CMK_TYPE_WIDGET)
@@ -30,7 +23,7 @@ GrapheneSettingsPanel * graphene_settings_panel_new()
 	return self;
 }
 
-static void graphene_settings_panel_class_init(GrapheneSettingsPanelClass *class)
+static void graphene_settings_panel_class_init(UNUSED GrapheneSettingsPanelClass *class)
 {
 }
 
@@ -61,8 +54,6 @@ static void on_settings_widget_clicked_n(GrapheneSettingsPanel *self, CmkButton 
 
 static void on_settings_widget_clicked(GrapheneSettingsPanel *self, CmkButton *button)
 {
-	const gchar *args = clutter_actor_get_name(CLUTTER_ACTOR(button));
-	
 	// Delay so the click animation can be seen
 	clutter_threads_add_timeout(200, (GSourceFunc)waitback, self);
 
@@ -73,7 +64,8 @@ static void on_settings_widget_clicked(GrapheneSettingsPanel *self, CmkButton *b
 	g_strfreev(argsSplit);
 }
 
-static void add_setting_widget_n(GrapheneSettingsPanel *self, const gchar *title, const gchar *iconName, GType panel, gboolean toggleable)
+UNUSED // Will use later as gnome-control-center becomes replaced
+static void add_setting_widget_n(GrapheneSettingsPanel *self, const gchar *title, const gchar *iconName, GType panel, UNUSED gboolean toggleable)
 {	
 	CmkButton *button = cmk_button_new(CMK_BUTTON_TYPE_FLAT);
 	CmkIcon *icon = cmk_icon_new_from_name(iconName, 24);
@@ -86,7 +78,7 @@ static void add_setting_widget_n(GrapheneSettingsPanel *self, const gchar *title
 	g_signal_connect_swapped(button, "activate", G_CALLBACK(on_settings_widget_clicked_n), self);
 }
 
-static void add_setting_widget(GrapheneSettingsPanel *self, const gchar *title, const gchar *iconName, const gchar *panel, gboolean toggleable)
+static void add_setting_widget(GrapheneSettingsPanel *self, const gchar *title, const gchar *iconName, const gchar *panel, UNUSED gboolean toggleable)
 {	
 	//clutter_actor_add_child(CLUTTER_ACTOR(self), cmk_separator_new_h());
 

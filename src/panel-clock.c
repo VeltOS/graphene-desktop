@@ -43,7 +43,7 @@ static void graphene_clock_label_init(GrapheneClockLabel *self)
 	g_signal_connect_swapped(self->interfaceSettings, "changed", G_CALLBACK(on_interface_settings_changed), self);
 	on_interface_settings_changed(self, "clock-", self->interfaceSettings);
 	
-	static GSourceFuncs funcs = { NULL, NULL, update, NULL };
+	static GSourceFuncs funcs = { NULL, NULL, update, NULL, NULL, NULL };
 	self->source = g_source_new(&funcs, sizeof(GSource));
 	g_source_set_callback(self->source, NULL, self, NULL); // Sets the userdata passed to update - the callback itself is ignored
 	g_source_set_ready_time(self->source, 0);
@@ -86,7 +86,7 @@ static void on_interface_settings_changed(GrapheneClockLabel *self, gchar *key, 
 		g_source_set_ready_time(self->source, 0); // Update label now
 }
 
-static gboolean update(GSource *source, GSourceFunc callback, gpointer userdata)
+static gboolean update(GSource *source, UNUSED GSourceFunc callback, gpointer userdata)
 {
 	GrapheneClockLabel *self = GRAPHENE_CLOCK_LABEL(userdata);
 	

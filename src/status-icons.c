@@ -100,7 +100,7 @@ static void graphene_volume_icon_dispose(GObject *self_)
 	G_OBJECT_CLASS(graphene_volume_icon_parent_class)->dispose(self_);
 }
 
-static void volume_icon_on_default_output_changed(GrapheneVolumeIcon *self, const GParamSpec *spec, CskAudioDeviceManager *audioManager)
+static void volume_icon_on_default_output_changed(GrapheneVolumeIcon *self, UNUSED const GParamSpec *spec, CskAudioDeviceManager *audioManager)
 {
 	if(CSK_IS_AUDIO_DEVICE(self->defaultOutput))
 		g_signal_handlers_disconnect_by_data(self->defaultOutput, self);
@@ -114,7 +114,7 @@ static void volume_icon_on_default_output_changed(GrapheneVolumeIcon *self, cons
 	volume_icon_on_update(self, NULL, self->defaultOutput);
 }
 
-static void volume_icon_on_update(GrapheneVolumeIcon *self, const GParamSpec *spec, CskAudioDevice *device)
+static void volume_icon_on_update(GrapheneVolumeIcon *self, UNUSED const GParamSpec *spec, UNUSED CskAudioDevice *device)
 {
 	float volume = 0;
 	if(self->defaultOutput && !csk_audio_device_get_muted(self->defaultOutput))

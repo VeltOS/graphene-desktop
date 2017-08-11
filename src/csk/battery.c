@@ -217,7 +217,7 @@ gint64 csk_battery_info_get_time(CskBatteryInfo *self)
 	return time;
 }
 
-static void on_upproxy_display_device_property_changed(CskBatteryInfo *self, GVariant *changed_properties, GStrv invalidated_properties, GDBusProxy *proxy)
+static void on_upproxy_display_device_property_changed(CskBatteryInfo *self, UNUSED GVariant *changed_properties, UNUSED GStrv invalidated_properties, UNUSED GDBusProxy *proxy)
 {
 	g_signal_emit_by_name(self, "update");
 }

@@ -6,12 +6,14 @@ cmake_minimum_required(VERSION 3.4)
 project(graphene-desktop)
 
 set(GRAPHENE_VERSION 0.3)
-set(GRAPHENE_DEBUG TRUE)
 
-if(GRAPHENE_DEBUG)
-	set(CMAKE_BUILD_TYPE DEBUG)
-	add_definitions(-DGRAPHENE_DEBUG)
+if(NOT CMAKE_BUILD_TYPE)
+	set(CMAKE_BUILD_TYPE Release)
 endif()
+
+set(CMAKE_C_FLAGS "-Wall -Wextra -DUNUSED=G_GNUC_UNUSED")
+set(CMAKE_C_FLAGS_DEBUG "-g -DGRAPHENE_DEBUG")
+set(CMAKE_C_FLAGS_RELEASE "-O3")
 
 add_definitions(-DGRAPHENE_VERSION_STR=\"${GRAPHENE_VERSION}\")
 

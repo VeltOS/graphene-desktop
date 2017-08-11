@@ -57,7 +57,6 @@ add_executable(graphene-desktop
 	panel-launcher.c
 	panel-settings.c
 	panel-clock.c
-	network.c
 	notifications-dbus-iface.c
 	notifications.c
 )
@@ -87,6 +86,9 @@ target_include_directories(graphene-desktop PRIVATE
 	${LIBACT_INCLUDE_DIRS}
 	${LIBCMK_INCLUDE_DIRS}
 )
+
+# Don't check for warnings on the auto-generated stuff
+set_source_files_properties(status-notifier-dbus-ifaces.c session-dbus-iface.c notifications-dbus-iface.c PROPERTIES COMPILE_FLAGS -Wno-all)
 
 # Normally, the CMake install functionality removes the executable's rpath,
 # which here includes /usr/lib/mutter. This keeps the rpath.

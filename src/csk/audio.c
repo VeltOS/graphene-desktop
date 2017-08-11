@@ -81,7 +81,7 @@ static void csk_audio_device_class_init(CskAudioDeviceClass *class)
 	g_object_class_install_properties(base, PROPD_LAST, propertiesD);
 }
 
-static void csk_audio_device_init(CskAudioDevice *self)
+static void csk_audio_device_init(UNUSED CskAudioDevice *self)
 {
 }
 
@@ -185,7 +185,7 @@ float csk_audio_device_get_balance(CskAudioDevice *device)
 	return device->balance;
 }
 
-void csk_audio_device_set_balance(CskAudioDevice *device, float balance)
+void csk_audio_device_set_balance(CskAudioDevice *device, UNUSED float balance)
 {
 	g_return_if_fail(CSK_IS_AUDIO_DEVICE(device));
 	g_return_if_fail(audio_device_valid(device));
@@ -471,7 +471,7 @@ static void on_manager_pa_state_change(pa_context *context, CskAudioDeviceManage
 		g_object_notify_by_pspec(G_OBJECT(self), propertiesM[PROP_READY]);
 }
 
-static void on_manager_pa_event(pa_context *context, pa_subscription_event_type_t type, uint32_t index, CskAudioDeviceManager *self)
+static void on_manager_pa_event(UNUSED pa_context *context, pa_subscription_event_type_t type, uint32_t index, CskAudioDeviceManager *self)
 {
 	pa_subscription_event_type_t eFacility = (type & PA_SUBSCRIPTION_EVENT_FACILITY_MASK);
 	pa_subscription_event_type_t eType = (type & PA_SUBSCRIPTION_EVENT_TYPE_MASK);
@@ -499,22 +499,25 @@ static void on_manager_pa_event(pa_context *context, pa_subscription_event_type_
 		if(dt != CSK_AUDIO_DEVICE_TYPE_INVALID)
 		{
 			CskAudioDevice *device = get_device(self, index, dt, FALSE, NULL);
-			device->type = CSK_AUDIO_DEVICE_TYPE_INVALID;
-			self->devices = g_list_remove(self->devices, device);
-			g_object_notify_by_pspec(G_OBJECT(device), propertiesD[PROP_TYPE]);
-			g_signal_emit(self, signalsM[SIGNAL_DEVICE_REMOVED], 0, device);
-			g_object_unref(device);
-			if(self->defaultOutput == device)
-				self->defaultOutput = NULL;
-			if(self->defaultInput == device)
-				self->defaultInput = NULL;
+			if(device)
+			{
+				device->type = CSK_AUDIO_DEVICE_TYPE_INVALID;
+				self->devices = g_list_remove(self->devices, device);
+				g_object_notify_by_pspec(G_OBJECT(device), propertiesD[PROP_TYPE]);
+				g_signal_emit(self, signalsM[SIGNAL_DEVICE_REMOVED], 0, device);
+				g_object_unref(device);
+				if(self->defaultOutput == device)
+					self->defaultOutput = NULL;
+				if(self->defaultInput == device)
+					self->defaultInput = NULL;
+			}
 		}
 	}
 
 	if(o) pa_operation_unref(o);
 }
 
-static void on_manager_server_get_info(pa_context *context, const pa_server_info *server, CskAudioDeviceManager *self)
+static void on_manager_server_get_info(UNUSED pa_context *context, const pa_server_info *server, CskAudioDeviceManager *self)
 {
 	if(!server || !self)
 		return;
@@ -622,7 +625,7 @@ static void manager_set_device_info(
 		g_object_notify_by_pspec(G_OBJECT(self), propertiesM[PROP_DEFAULT_OUTPUT]);
 }
 
-static void on_manager_sink_get_info(pa_context *context, const pa_sink_info *sink, int eol, CskAudioDeviceManager *self)
+static void on_manager_sink_get_info(UNUSED pa_context *context, const pa_sink_info *sink, UNUSED int eol, CskAudioDeviceManager *self)
 {
 	if(!sink || !self)
 		return; // When listing devices, a final NULL device will be sent (with eol = 1)
@@ -649,7 +652,7 @@ static void on_manager_sink_get_info(pa_context *context, const pa_sink_info *si
 		sink->mute);
 }
 
-static void on_manager_source_get_info(pa_context *context, const pa_source_info *source, int eol, CskAudioDeviceManager *self)
+static void on_manager_source_get_info(UNUSED pa_context *context, const pa_source_info *source, UNUSED int eol, CskAudioDeviceManager *self)
 {
 	if(!source || !self)
 		return; // When listing devices, a final NULL device will be sent (with eol = 1)
@@ -678,6 +681,9 @@ static void on_manager_source_get_info(pa_context *context, const pa_source_info
 
 static CskAudioDevice * get_device(CskAudioDeviceManager *self, guint32 index, CskAudioDeviceType type, gboolean create, gboolean *created)
 {
+	if(created)
+		*created = FALSE;
+	
 	// Find an existing device
 	for(GList *it=self->devices; it!=NULL; it=it->next)
 	{
@@ -685,6 +691,11 @@ static CskAudioDevice * get_device(CskAudioDeviceManager *self, guint32 index, C
 		if(device->type == type && device->index == index)
 			return device;
 	}
+	
+	if(!create)
+		return NULL;
+	if(created)
+		*created = TRUE;
 	
 	CskAudioDevice *device = CSK_AUDIO_DEVICE(g_object_new(CSK_TYPE_AUDIO_DEVICE, NULL));
 	device->manager = self;

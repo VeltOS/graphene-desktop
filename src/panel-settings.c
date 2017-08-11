@@ -116,12 +116,21 @@ static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
 static void graphene_settings_popup_dispose(GObject *self_)
 {
 	GrapheneSettingsPopup *self = GRAPHENE_SETTINGS_POPUP(self_);
+	
 	if(self->panelStack)
 		g_list_free_full(self->panelStack, (GDestroyNotify)clutter_actor_destroy);
 	self->panelStack = NULL;
+	
+	if(self->user && self->notifyUserChangedId)
+		g_signal_handler_disconnect(self->user, self->notifyUserChangedId);
+	self->notifyUserChangedId = 0;
+	self->user = NULL;
+	
 	if(self->userManager && self->notifyIsLoadedId)
 		g_signal_handler_disconnect(self->userManager, self->notifyIsLoadedId);
+	self->userManager = NULL;
 	self->notifyIsLoadedId = 0;
+	
 	G_OBJECT_CLASS(graphene_settings_popup_parent_class)->dispose(self_);
 }
 

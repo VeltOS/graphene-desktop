@@ -77,8 +77,10 @@ static void graphene_wm_background_constructed(GObject *self_)
 
 static void graphene_wm_background_dispose(GObject *gobject)
 {
-	g_clear_object(&GRAPHENE_WM_BACKGROUND(gobject)->screen);
-	g_clear_object(&GRAPHENE_WM_BACKGROUND(gobject)->actor);
+	GrapheneWMBackground *self = GRAPHENE_WM_BACKGROUND(gobject);
+	g_clear_object(&self->screen);
+	g_clear_object(&self->actor);
+	g_clear_object(&self->settings);
 	G_OBJECT_CLASS(graphene_wm_background_parent_class)->dispose(gobject);
 }
 

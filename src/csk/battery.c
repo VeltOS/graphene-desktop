@@ -219,23 +219,23 @@ gint64 csk_battery_info_get_time(CskBatteryInfo *self)
 
 static void on_upproxy_display_device_property_changed(CskBatteryInfo *self, GVariant *changed_properties, GStrv invalidated_properties, GDBusProxy *proxy)
 {
-  g_signal_emit_by_name(self, "update");
+	g_signal_emit_by_name(self, "update");
 }
 
 static gchar * get_icon_name(CskBatteryInfo *self)
 {
-  gdouble percentage = csk_battery_info_get_percent(self);
-  guint32 state = csk_battery_info_get_state(self);
-  
-  const gchar *percentageString = "empty";
-  if     (percentage <= 10)  percentageString = "empty";
-  else if(percentage <= 35)  percentageString = "low";
-  else if(percentage <= 75)  percentageString = "good";
-  else                       percentageString = "full";
-  
-  const gchar *stateString = "";
-  if     (state == 4) stateString = "-charged";
-  else if(state == 1) stateString = "-charging";
-  
-  return g_strdup_printf("battery-%s%s-symbolic", percentageString, stateString);
+	gdouble percentage = csk_battery_info_get_percent(self);
+	guint32 state = csk_battery_info_get_state(self);
+	
+	const gchar *percentageString = "empty";
+	if     (percentage <= 10)  percentageString = "empty";
+	else if(percentage <= 35)  percentageString = "low";
+	else if(percentage <= 75)  percentageString = "good";
+	else                       percentageString = "full";
+	
+	const gchar *stateString = "";
+	if     (state == 4) { percentageString = "full"; stateString = "-charged"; }
+	else if(state == 1) stateString = "-charging";
+
+	return g_strdup_printf("battery-%s%s-symbolic", percentageString, stateString);
 }

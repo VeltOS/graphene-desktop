@@ -41,13 +41,15 @@ static void graphene_network_icon_init(GrapheneNetworkIcon *self)
 
 static void graphene_network_icon_dispose(GObject *self_)
 {
-	g_clear_object(&GRAPHENE_NETWORK_ICON(self_)->mn);
+	GrapheneNetworkIcon *self = GRAPHENE_NETWORK_ICON(self_);
+	if(CSK_IS_NETWORK_MANAGER(self->mn))
+		g_signal_handlers_disconnect_by_data(self->mn, self);
+	g_clear_object(&self->mn);
 	G_OBJECT_CLASS(graphene_network_icon_parent_class)->dispose(self_);
 }
 
 static void network_icon_on_update(GrapheneNetworkIcon *self)
 {
-	g_message("set icon: %s", csk_network_manager_get_icon(self->mn));
 	cmk_icon_set_icon(CMK_ICON(self), csk_network_manager_get_icon(self->mn));
 }
 
@@ -86,10 +88,14 @@ static void graphene_volume_icon_init(GrapheneVolumeIcon *self)
 	self->audioManager = csk_audio_device_manager_get_default();
 	g_signal_connect_swapped(self->audioManager, "notify::default-output", G_CALLBACK(volume_icon_on_default_output_changed), self);
 	volume_icon_on_default_output_changed(self, NULL, self->audioManager);
+	volume_icon_on_update(self, NULL, self->defaultOutput);
 }
 
 static void graphene_volume_icon_dispose(GObject *self_)
 {
+	GrapheneVolumeIcon *self = GRAPHENE_VOLUME_ICON(self_);
+	if(CSK_IS_AUDIO_DEVICE(self->defaultOutput))
+		g_signal_handlers_disconnect_by_data(self->defaultOutput, self);
 	g_clear_object(&GRAPHENE_VOLUME_ICON(self_)->audioManager);
 	G_OBJECT_CLASS(graphene_volume_icon_parent_class)->dispose(self_);
 }
@@ -165,6 +171,10 @@ static void graphene_battery_icon_init(GrapheneBatteryIcon *self)
 
 static void graphene_battery_icon_dispose(GObject *self_)
 {
+	GrapheneBatteryIcon *self = GRAPHENE_BATTERY_ICON(self_);
+	if(CSK_IS_BATTERY_INFO(self->batInfo))
+		g_signal_handlers_disconnect_by_data(self->batInfo, self);
+	g_clear_object(&GRAPHENE_BATTERY_ICON(self_)->batInfo);
 	G_OBJECT_CLASS(graphene_battery_icon_parent_class)->dispose(self_);
 }
 
@@ -175,7 +185,7 @@ static void battery_icon_on_update(GrapheneBatteryIcon *self, CskBatteryInfo *in
 	g_free(iconName);
 
 	ClutterColor fg = {255,0,0,255};
-	if(csk_battery_info_get_percent(info) <= 15)
+	if(csk_battery_info_is_available(info) && csk_battery_info_get_percent(info) <= 15)
 		cmk_widget_set_named_color(CMK_WIDGET(self), "foreground", &fg);
 	else
 		cmk_widget_set_named_color(CMK_WIDGET(self), "foreground", NULL);

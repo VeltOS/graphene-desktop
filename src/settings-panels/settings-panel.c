@@ -57,11 +57,18 @@ static void on_settings_widget_clicked(GrapheneSettingsPanel *self, CmkButton *b
 	// Delay so the click animation can be seen
 	clutter_threads_add_timeout(200, (GSourceFunc)waitback, self);
 
+	// As of September-ish 2017, gnome-control-center requires
+	// this set otherwise its GUI is completely blank and broken.
+	gchar **envp = g_environ_setenv(g_get_environ(), "XDG_CURRENT_DESKTOP", "GNOME", TRUE);
+
 	gchar **argsSplit = g_new0(gchar *, 3);
 	argsSplit[0] = g_strdup("gnome-control-center");
 	argsSplit[1] = g_strdup(clutter_actor_get_name(CLUTTER_ACTOR(button)));
-	g_spawn_async(NULL, argsSplit, NULL, G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL | G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL);
+
+	g_spawn_async(NULL, argsSplit, envp, G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL | G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL);
+
 	g_strfreev(argsSplit);
+	g_strfreev(envp);
 }
 
 UNUSED // Will use later as gnome-control-center becomes replaced

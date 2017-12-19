@@ -36,6 +36,7 @@
 #include <stdio.h>
 #include "pkauthdialog.h"
 #include "dialog.h"
+#include "async-sequence.h"
 
 #define GRAPHENE_SESSION_NAME "Graphene"
 #define SESSION_DBUS_NAME "org.gnome.SessionManager"
@@ -85,8 +86,6 @@ typedef struct {
 	GDBusConnection *eBus; // sEssion DBus Connection
 	GDBusConnection *yBus; // sYstem DBus Connection
 	guint dbusNameId;
-	gboolean hasName;
-	gboolean polkitIsRegistered;
 	DBusSessionManager *dbusSMSkeleton;
 	DBusPolkitAuthAgent *dbusPkAgentSkeleton;
 	gchar *ldSessionObject; // DBus session object path provided by systemd-logind
@@ -101,10 +100,7 @@ typedef struct {
 } GrapheneSession;
 
 
-static void on_ybus_connection_acquired(GObject *source, GAsyncResult *res, gpointer userdata);
-static void on_logind_session_acquired(GDBusConnection *yBus, GAsyncResult *res, gpointer userdata);
-static void on_polkit_auth_agent_registered(GDBusConnection *yBus, GAsyncResult *res, gpointer userdata);
-static void on_ebus_connection_acquired(GObject *source, GAsyncResult *res, gpointer userdata);
+static void async_init_sequence(UNUSED GObject *source, GAsyncResult *res, gpointer userdata);
 static void on_eybus_connection_lost(GDBusConnection *eyBus, gboolean remotePeerVanished, GError *error, gpointer userdata);
 static void on_dbus_name_acquired(GDBusConnection *connection, const gchar *name, void *userdata);
 static void on_dbus_name_lost(GDBusConnection *connection, const gchar *name, void *userdata);
@@ -148,36 +144,66 @@ void graphene_session_init(CSMStartupCompleteCallback startupCb, CSMDialogCallba
 	session->quitCb = quitCb;
 	session->cbUserdata = cbUserdata;
 	
-	// Setup session bus things (export SM interface, etc) and system bus
-	// things (systemd-logind interaction, etc) at the same time. If either one
-	// fails, abort the session. Whichever one finishes last will run the
-	// STARTUP phase to "begin" the session.
-	// Also, the system bus setup part will split into two async paths, so
-	// really it's the last of all three paths to finish...
 	session->cancel = g_cancellable_new();
-	g_bus_get(G_BUS_TYPE_SYSTEM, session->cancel, on_ybus_connection_acquired, NULL);
-	g_bus_get(G_BUS_TYPE_SESSION, session->cancel, on_ebus_connection_acquired, NULL);
+	async_init_sequence(NULL, NULL, NULL);
 }
 
-static void on_ybus_connection_acquired(UNUSED GObject *source, GAsyncResult *res, UNUSED gpointer userdata)
+// Performs the init sequence:
+// 1. Get System Bus
+// 2. Get Session Bus
+// 3. Get session object (from logind)
+// 4. Register as an authentication agent
+// 5. Export/own session manager interface/name on DBus
+// Once the name has been owned, do_startup() is called
+static void async_init_sequence(UNUSED GObject *source, GAsyncResult *res, gpointer userdata)
 {
 	GError *error = NULL;
-	GDBusConnection *yBus = g_bus_get_finish(res, &error);
-	if(!yBus || error)
+	GVariant *ret = NULL;
+	
+	// Begin async sequence. See async-sequence.h for details.
+	// Simply: async_init_sequence exits at calls to ASYNC_SEQ_WAIT
+	// and then resumes at that spot once the async operation
+	// completes, as if the operation were synchronous.
+	ASYNC_SEQ_BEGIN(userdata, )
+
+	// Get system bus
+	g_bus_get(G_BUS_TYPE_SYSTEM, session->cancel, async_init_sequence, seqdata);
+	ASYNC_SEQ_WAIT(1, )
+
+	session->yBus = g_bus_get_finish(res, &error);
+	if(!session->yBus || error)
 	{
-		g_critical("Failed to acquire System DBus connection.");
-		g_clear_object(&yBus);
+		g_critical("Failed to acquire System DBus connection: %s", error ? error->message : "Unknown error");
+		g_clear_object(&session->yBus);
 		g_clear_error(&error);
 		graphene_session_exit(TRUE);
-		return;	
+		return;
 	}
-	
+
 	g_message("Acquired System DBus connection.");
-	g_signal_connect(yBus, "closed", G_CALLBACK(on_eybus_connection_lost), NULL);
-	g_dbus_connection_set_exit_on_close(yBus, FALSE);
-	session->yBus = yBus;
-	
-	g_dbus_connection_call(yBus,
+	g_signal_connect(session->yBus, "closed", G_CALLBACK(on_eybus_connection_lost), NULL);
+	g_dbus_connection_set_exit_on_close(session->yBus, FALSE);
+
+	// Get session bus
+	g_bus_get(G_BUS_TYPE_SESSION, session->cancel, async_init_sequence, seqdata);
+	ASYNC_SEQ_WAIT(2, )
+
+	session->eBus = g_bus_get_finish(res, &error);
+	if(!session->eBus || error)
+	{
+		g_critical("Failed to acquire Session DBus connection: %s", error ? error->message : "Unknown error");
+		g_clear_object(&session->eBus);
+		g_clear_error(&error);
+		graphene_session_exit(TRUE);
+		return;
+	}
+
+	g_message("Acquired Session DBus connection.");
+	g_signal_connect(session->eBus, "closed", G_CALLBACK(on_eybus_connection_lost), NULL);
+	g_dbus_connection_set_exit_on_close(session->eBus, FALSE);
+
+	// Get logind session object
+	g_dbus_connection_call(session->yBus,
 		"org.freedesktop.login1",
 		"/org/freedesktop/login1",
 		"org.freedesktop.login1.Manager",
@@ -187,29 +213,54 @@ static void on_ybus_connection_acquired(UNUSED GObject *source, GAsyncResult *re
 		G_DBUS_CALL_FLAGS_NONE,
 		-1,
 		session->cancel,
-		(GAsyncReadyCallback)on_logind_session_acquired,
-		NULL);
-}
+		(GAsyncReadyCallback)async_init_sequence,
+		seqdata);
+	ASYNC_SEQ_WAIT(3, )
 
-static void on_logind_session_acquired(GDBusConnection *yBus, GAsyncResult *res, UNUSED gpointer userdata)
-{
-	GError *error = NULL;
-	GVariant *ret = g_dbus_connection_call_finish(yBus, res, &error);
+	ret = g_dbus_connection_call_finish(session->yBus, res, &error);
 	if(!ret || error)
 	{
-		g_critical("Failed to find logind session");
-		if(error)
-			g_critical("%s", error->message);
+		g_critical("Failed to find logind session: %s", error ? error->message : "Unknown error");
 		g_clear_error(&error);
 		g_clear_object(&ret);
 		graphene_session_exit(TRUE);
 		return;
 	}
-	
+
 	g_variant_get(ret, "(o)", &session->ldSessionObject);
-	g_message("Got session ID: %s", session->ldSessionObject);
 	g_variant_unref(ret);
-	
+	g_message("logind session object: %s", session->ldSessionObject);
+
+	// Get session ID
+	g_dbus_connection_call(session->yBus,
+		"org.freedesktop.login1",
+		session->ldSessionObject,
+		"org.freedesktop.DBus.Properties",
+		"Get",
+		g_variant_new("(ss)", "org.freedesktop.login1.Session", "Id"),
+		G_VARIANT_TYPE("(v)"),
+		G_DBUS_CALL_FLAGS_NONE,
+		-1,
+		session->cancel,
+		(GAsyncReadyCallback)async_init_sequence,
+		seqdata);
+	ASYNC_SEQ_WAIT(4, )
+
+	ret = g_dbus_connection_call_finish(session->yBus, res, &error);
+	if(!ret || error)
+	{
+		g_critical("Failed to get session id: %s", error ? error->message : "Unknown error");
+		g_clear_error(&error);
+		g_clear_object(&ret);
+		graphene_session_exit(TRUE);
+		return;
+	}
+
+	GVariant *sessionIdV = NULL;
+	g_variant_get(ret, "(v)", &sessionIdV);
+	g_variant_unref(ret);
+
+	// Setup authentication agent interface
 	session->dbusPkAgentSkeleton = dbus_org_freedesktop_policy_kit1_authentication_agent_skeleton_new();
 	g_signal_connect(session->dbusPkAgentSkeleton, "handle-begin-authentication", G_CALLBACK(on_pk_agent_begin_authentication), NULL);
 	g_signal_connect(session->dbusPkAgentSkeleton, "handle-cancel-authentication", G_CALLBACK(on_pk_agent_cancel_authentication), NULL);
@@ -217,84 +268,52 @@ static void on_logind_session_acquired(GDBusConnection *yBus, GAsyncResult *res,
 	// TODO: Failing to register as an authentication agent probably shouldn't
 	// be fatal. The session could still run without it (although various
 	// things may not work).
-	if(!g_dbus_interface_skeleton_export(G_DBUS_INTERFACE_SKELETON(session->dbusPkAgentSkeleton), yBus, POLKIT_AUTH_AGENT_DBUS_PATH, NULL))
+	if(!g_dbus_interface_skeleton_export(G_DBUS_INTERFACE_SKELETON(session->dbusPkAgentSkeleton), session->yBus, POLKIT_AUTH_AGENT_DBUS_PATH, NULL))
 	{
 		g_critical("Failed to export PolKit authentication agent dbus object.");
 		graphene_session_exit(TRUE);
 		return;
 	}
-	
-	// PolKit just wants the session id, not the full object path
-	// The object path is in the form /org/freedesktop/login1/session/<session id>
-	gchar **tokens = g_strsplit(session->ldSessionObject, "/", -1);
-	guint numTokens = g_strv_length(tokens);
-	GVariant *sessionIdV = g_variant_new_string(tokens[numTokens-1]);
-	g_strfreev(tokens);
-	
+
 	GVariantBuilder builder;
 	g_variant_builder_init(&builder, G_VARIANT_TYPE("a{sv}"));
 	g_variant_builder_add(&builder, "{sv}", "session-id", sessionIdV);
-	GVariant *dict = g_variant_builder_end(&builder);
+	GVariant *dict = g_variant_builder_end(&builder); // dict is Floating
+	g_variant_unref(sessionIdV);
 	
-	g_dbus_connection_call(yBus,
+	// Register as authentication agent
+	g_dbus_connection_call(session->yBus,
 		"org.freedesktop.PolicyKit1",
 		"/org/freedesktop/PolicyKit1/Authority",
 		"org.freedesktop.PolicyKit1.Authority",
 		"RegisterAuthenticationAgent",
 		g_variant_new("((s@a{sv})ss)",
 			"unix-session",
-			dict,
+			dict, // dict absorbed
 			g_getenv("LANG"),
 			POLKIT_AUTH_AGENT_DBUS_PATH),
 		NULL,
 		G_DBUS_CALL_FLAGS_NONE,
 		-1,
 		session->cancel,
-		(GAsyncReadyCallback)on_polkit_auth_agent_registered,
-		NULL);
-}
+		(GAsyncReadyCallback)async_init_sequence,
+		seqdata);
+	ASYNC_SEQ_WAIT(5, )
 
-static void on_polkit_auth_agent_registered(GDBusConnection *yBus, GAsyncResult *res, UNUSED gpointer userdata)
-{
-	GError *error = NULL;
-	GVariant *ret = g_dbus_connection_call_finish(yBus, res, &error);
-	if(error)
+	ret = g_dbus_connection_call_finish(session->yBus, res, &error);
+	if(!ret || error)
 	{
-		g_critical("Failed to register as PolKit Authentication Agent: %s", error->message);
+		g_critical("Failed to register as PolKit Authentication Agent: %s", error ? error->message : "Unknown error");
 		g_clear_error(&error);
+		g_clear_object(&ret);
 		graphene_session_exit(TRUE);
 		return;
 	}
-	
-	g_variant_unref(ret);
- 
-	g_message("Registered as authentication agent!");
-	if(session->hasName)
-	{
-		g_message("Running session from auth registered");
-		do_startup();
-	}
-}
 
-static void on_ebus_connection_acquired(UNUSED GObject *source, GAsyncResult *res, UNUSED gpointer userdata)
-{
-	GError *error = NULL;
-	GDBusConnection *eBus = g_bus_get_finish(res, &error);
-	if(!eBus || error)
-	{
-		g_critical("Failed to acquire Session DBus connection.");
-		g_clear_object(&eBus);
-		g_clear_error(&error);
-		graphene_session_exit(TRUE);
-		return;	
-	}
-	
-	g_message("Acquired Session DBus connection.");
-	
-	g_signal_connect(eBus, "closed", G_CALLBACK(on_eybus_connection_lost), NULL);
-	g_dbus_connection_set_exit_on_close(eBus, FALSE);
-	session->eBus = eBus;
-	
+	g_variant_unref(ret);
+	g_message("Registered as authentication agent");
+
+	// Export SM object
 	session->dbusSMSkeleton = dbus_session_manager_skeleton_new();
 	connect_dbus_methods();
 	dbus_session_manager_set_session_name(session->dbusSMSkeleton, GRAPHENE_SESSION_NAME);
@@ -302,20 +321,37 @@ static void on_ebus_connection_acquired(UNUSED GObject *source, GAsyncResult *re
 	// TODO: How does inhibited_actions work
 	//dbus_session_manager_set_inhibited_actions(session->dbusSMSkeleton, ...);
 	
-	if(!g_dbus_interface_skeleton_export(G_DBUS_INTERFACE_SKELETON(session->dbusSMSkeleton), eBus, SESSION_DBUS_PATH, NULL))
+	if(!g_dbus_interface_skeleton_export(G_DBUS_INTERFACE_SKELETON(session->dbusSMSkeleton), session->eBus, SESSION_DBUS_PATH, NULL))
 	{
 		g_critical("Failed to export SM dbus object.");
 		graphene_session_exit(TRUE);
 		return;
 	}
-	
-	session->dbusNameId = g_bus_own_name_on_connection(eBus, 
+
+	// Own SM name on session bus
+	session->dbusNameId = g_bus_own_name_on_connection(session->eBus, 
 		SESSION_DBUS_NAME,
 		G_BUS_NAME_OWNER_FLAGS_REPLACE,
 		on_dbus_name_acquired,
 		on_dbus_name_lost,
 		NULL,
 		NULL);
+
+	ASYNC_SEQ_END()
+}
+
+static void on_dbus_name_acquired(UNUSED GDBusConnection *eBus, UNUSED const gchar *name, UNUSED void *userdata)
+{
+	g_message("Acquired name '%s' on the Session DBus", SESSION_DBUS_NAME);
+	do_startup();
+}
+
+static void on_dbus_name_lost(UNUSED GDBusConnection *eBus, UNUSED const gchar *name, UNUSED void *userdata)
+{
+	// Not necessarily fatal if the name is lost but connection isn't, so
+	// keep the session alive. No new clients will be able to register, but
+	// existing clients should be fine, and logout should work.
+	g_warning("Lost name on the Session DBus");
 }
 
 static void on_eybus_connection_lost(UNUSED GDBusConnection *eyBus, UNUSED gboolean remotePeerVanished, UNUSED GError *error, UNUSED gpointer userdata)
@@ -324,27 +360,6 @@ static void on_eybus_connection_lost(UNUSED GDBusConnection *eyBus, UNUSED gbool
 	g_clear_object(&session->yBus);
 	g_clear_object(&session->eBus);
 	graphene_session_exit(TRUE);
-}
-
-static void on_dbus_name_acquired(UNUSED GDBusConnection *eBus, UNUSED const gchar *name, UNUSED void *userdata)
-{
-	session->hasName = TRUE;
-	g_message("Acquired name '%s' on the Session DBus", SESSION_DBUS_NAME);
-	
-	if(session->polkitIsRegistered)
-	{
-		g_message("Running session from dbus name acquired");
-		do_startup();
-	}
-}
-
-static void on_dbus_name_lost(UNUSED GDBusConnection *eBus, UNUSED const gchar *name, UNUSED void *userdata)
-{
-	// Not necessarily fatal if the name is lost but connection isn't, so
-	// keep the session alive. No new clients will be able to register, but
-	// existing clients should be fine, and logout should work.
-	session->hasName = FALSE;
-	g_warning("Lost name on the Session DBus");
 }
 
 
@@ -365,6 +380,7 @@ static void do_startup()
 	launch_desktop();
 	check_startup_complete();
 	
+	// Stopped if STARTUP phase completes, in do_idle_phase
 	self_destruct_countdown();
 }
 
@@ -372,14 +388,10 @@ static gboolean check_startup_complete()
 {
 	if(session->phase != SESSION_PHASE_STARTUP)
 		return FALSE;
+	
 	for(GList *it = session->clients; it != NULL; it = it->next)
-	{
 		if(!graphene_session_client_get_is_ready(it->data))
-		{
-			g_message("... Client '%s' is not ready\n", graphene_session_client_get_best_name(it->data));
 			return FALSE;
-		}
-	}
 	
 	do_idle_phase();
 	return TRUE;
@@ -392,7 +404,7 @@ static void launch_desktop()
 	gpointer key, value;
 	g_hash_table_iter_init(&iter, autostarts);
 	while(g_hash_table_iter_next(&iter, &key, &value))
-	{    
+	{
 		GDesktopAppInfo *desktopInfo = G_DESKTOP_APP_INFO(value);
     	gchar *phase = g_desktop_app_info_get_string(desktopInfo, "X-GNOME-Autostart-Phase");
 	
@@ -436,7 +448,7 @@ static void launch_apps()
 	gpointer key, value;
 	g_hash_table_iter_init(&iter, autostarts);
 	while(g_hash_table_iter_next(&iter, &key, &value))
-	{    
+	{
 		GDesktopAppInfo *desktopInfo = G_DESKTOP_APP_INFO(value);
     	gchar *phase = g_desktop_app_info_get_string(desktopInfo, "X-GNOME-Autostart-Phase");
 
@@ -769,76 +781,78 @@ static void on_client_notify_complete(GrapheneSessionClient *client)
  */
 
 /*
- * Gets a GHashTable of name->GDesktopAppInfo* containing all autostart .desktop files
- * in all system/user config directories. Also includes Graphene-specific .desktop files.
+ * Gets a GHashTable of name->GDesktopAppInfo* containing all autostart
+ * .desktop files in all system/user config directories. Also includes
+ * Graphene-specific .desktop files.
  *
- * Does not include any .desktop files with the Hidden attribute set to true, or
- * any that have the OnlyShowIn attribute set to something other than "Graphene" or "GNOME".
+ * Does not include any .desktop files with the Hidden attribute set to
+ * true, or any that have the OnlyShowIn attribute set to something other
+ * than "Graphene" or "GNOME".
  *
- * Free the returned GHashTable by calling g_hash_table_unref() on the table itself.
- * All keys and values are automatically destroyed.
+ * Free the returned GHashTable by calling g_hash_table_unref() on the
+ * table itself. All keys and values are automatically destroyed.
  */
 static GHashTable * list_autostarts() 
 {
-  GHashTable *desktopInfoTable = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_object_unref);
-  
-  gchar **configDirs = strv_append(g_get_system_config_dirs(), g_get_user_config_dir()); // Important that the user config dir comes last (for overwriting)
-
-  guint numConfigDirs = g_strv_length(configDirs);
-  for(guint i=0;i<numConfigDirs;++i)
-  {
-    gchar *searchPath = g_strconcat(configDirs[i], "/autostart", NULL);
-    GFile *dir = g_file_new_for_path(searchPath);
-    
-    GFileEnumerator *iter = g_file_enumerate_children(dir, "standard::*", G_FILE_QUERY_INFO_NONE, NULL, NULL);
-    if(!iter)
-    {
-      g_warning("Failed to search the directory '%s' for .desktop files.", searchPath);
-      continue;
-    }
-    
-    GFileInfo *info = NULL;
-    while(g_file_enumerator_iterate(iter, &info, NULL, NULL, NULL) && info != NULL)
-    {
-      const gchar *_name = g_file_info_get_name(info);
-      if(!g_str_has_suffix(_name, ".desktop"))
-        continue;
-        
-      gchar *name = g_strdup(_name);
-      
-      gchar *desktopInfoPath = g_strconcat(searchPath, "/", name, NULL);
-      GDesktopAppInfo *desktopInfo = g_desktop_app_info_new_from_filename(desktopInfoPath);
-      
-      if(desktopInfo)
-      {
-        // "Hidden should have been called Deleted. ... It's strictly equivalent to the .desktop file not existing at all."
-        // https://specifications.freedesktop.org/desktop-entry-spec/latest/ar01s05.html
-        gboolean deleted = g_desktop_app_info_get_is_hidden(desktopInfo);
-        gboolean shouldShow = g_desktop_app_info_get_show_in(desktopInfo, "GNOME")
-                              || g_desktop_app_info_get_show_in(desktopInfo, "Graphene");
-                              
-        if(deleted || !shouldShow) // Hidden .desktops should be completely ignored
-        {
-          g_message("Skipping '%s' because it is hidden or not available for Graphene.", name);
-          g_object_unref(desktopInfo);
-          g_hash_table_remove(desktopInfoTable, name); // Overwrite previous entries of the same name
-        }
-        else
-        {
-          g_hash_table_insert(desktopInfoTable, name, desktopInfo); // Overwrite previous entries of the same name
-        }
-      }
-      
-      g_free(desktopInfoPath);
-      
-      info = NULL; // Automatically freed
-    }
-    
-    g_object_unref(iter);
-    g_free(searchPath);
-  }
-  g_strfreev(configDirs);
-  return desktopInfoTable;
+	GHashTable *desktopInfoTable = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_object_unref);
+	
+	gchar **configDirs = strv_append(g_get_system_config_dirs(), g_get_user_config_dir()); // Important that the user config dir comes last (for overwriting)
+	
+	guint numConfigDirs = g_strv_length(configDirs);
+	for(guint i=0;i<numConfigDirs;++i)
+	{
+		gchar *searchPath = g_strconcat(configDirs[i], "/autostart", NULL);
+		GFile *dir = g_file_new_for_path(searchPath);
+		
+		GFileEnumerator *iter = g_file_enumerate_children(dir, "standard::*", G_FILE_QUERY_INFO_NONE, NULL, NULL);
+		if(!iter)
+		{
+			g_warning("Failed to search the directory '%s' for .desktop files.", searchPath);
+			continue;
+		}
+		
+		GFileInfo *info = NULL;
+		while(g_file_enumerator_iterate(iter, &info, NULL, NULL, NULL) && info != NULL)
+		{
+			const gchar *_name = g_file_info_get_name(info);
+			if(!g_str_has_suffix(_name, ".desktop"))
+				continue;
+			
+			gchar *name = g_strdup(_name);
+			
+			gchar *desktopInfoPath = g_strconcat(searchPath, "/", name, NULL);
+			GDesktopAppInfo *desktopInfo = g_desktop_app_info_new_from_filename(desktopInfoPath);
+			
+			if(desktopInfo)
+			{
+				// "Hidden should have been called Deleted. ... It's strictly equivalent to the .desktop file not existing at all."
+				// https://specifications.freedesktop.org/desktop-entry-spec/latest/ar01s05.html
+				gboolean deleted = g_desktop_app_info_get_is_hidden(desktopInfo);
+				gboolean shouldShow = g_desktop_app_info_get_show_in(desktopInfo, "GNOME")
+				                      || g_desktop_app_info_get_show_in(desktopInfo, "Graphene");
+				
+				if(deleted || !shouldShow) // Hidden .desktops should be completely ignored
+				{
+					g_message("Skipping '%s' because it is hidden or not available for Graphene.", name);
+					g_object_unref(desktopInfo);
+					g_hash_table_remove(desktopInfoTable, name); // Overwrite previous entries of the same name
+				}
+				else
+				{
+					g_hash_table_insert(desktopInfoTable, name, desktopInfo); // Overwrite previous entries of the same name
+				}
+			}
+			
+			g_free(desktopInfoPath);
+			
+			info = NULL; // Automatically freed
+		}
+		
+		g_object_unref(iter);
+		g_free(searchPath);
+	}
+	g_strfreev(configDirs);
+	return desktopInfoTable;
 }
 
 static void launch_autostart(GDesktopAppInfo *desktopInfo)
@@ -934,8 +948,7 @@ static gboolean on_client_uninhibit(DBusSessionManager *object, GDBusMethodInvoc
 
 static gboolean on_dbus_set_env(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *variable, const gchar *value, UNUSED gpointer userdata)
 {
-	// Setting environment variables isn't really useful after the startup phase
-	if(session && session->phase <= SESSION_PHASE_STARTUP)
+	if(session)
 	{
 		// Variable name cannot contain = according to g_setenv docs.
 		if(g_strstr_len(variable, -1, "=") != NULL)

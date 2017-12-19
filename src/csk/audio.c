@@ -430,7 +430,6 @@ static void on_manager_pa_state_change(pa_context *context, CskAudioDeviceManage
 	gboolean prevReady = self->ready;
 
 	int state = pa_context_get_state(context);
-	g_message("state: %i", state);
 	switch(state)
 	{
 	case PA_CONTEXT_READY:

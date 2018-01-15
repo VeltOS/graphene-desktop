@@ -61,7 +61,7 @@ static gint64 get_backlight(void)
 
 static gboolean set_backlight(gint64 val)
 {
-	gchar *sval = g_strdup_printf("%li", val);
+	gchar *sval = g_strdup_printf("%lli", val);
 	gint exitCode;
 	gboolean r = backlight_command(BH_SET, sval, NULL, &exitCode);
 	g_free(sval);

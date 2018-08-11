@@ -33,9 +33,8 @@ void graphene_session_init(CSMStartupCompleteCallback startupCb, CSMDialogCallba
 /*
  * Immediately exits the session, attempting to close clients.
  * Pass TRUE to failed if this exit is due to an error.
- * Return value for internal purposes. Ignore.
  */
-gboolean graphene_session_exit(gboolean failed);
+void graphene_session_exit(gboolean failed);
 
 /*
  * Shows the logout dialog, same as the logout DBus command.

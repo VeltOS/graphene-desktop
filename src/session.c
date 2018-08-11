@@ -563,10 +563,10 @@ static void do_exit(ExitType exitType, gboolean force)
 	self_destruct_countdown();
 }
 
-gboolean graphene_session_exit(gboolean failed)
+void graphene_session_exit(gboolean failed)
 {
 	if(!session)
-		return G_SOURCE_REMOVE;
+		return;
 
 	g_message("Session exiting...");
 
@@ -614,6 +614,11 @@ gboolean graphene_session_exit(gboolean failed)
 	
 	if(quitCb)
 		quitCb(failed, cbUserdata);
+}
+
+static gboolean exit_on_idle_cb(gpointer failed)
+{
+	graphene_session_exit(GPOINTER_TO_INT(failed));
 	return G_SOURCE_REMOVE;
 }
 
@@ -622,7 +627,7 @@ static void graphene_session_exit_on_idle(gboolean failed)
 	// G_PRIORITY_HIGH-10 is higher than G_PRIORITY_HIGH
 	// This "on idle" exit is so that the session can be exited from
 	// callbacks, such as DBus method handlers, without breaking things.
-	g_idle_add_full(G_PRIORITY_HIGH - 10, (GSourceFunc)graphene_session_exit, GINT_TO_POINTER(failed), NULL);
+	g_idle_add_full(G_PRIORITY_HIGH - 10, exit_on_idle_cb, GINT_TO_POINTER(failed), NULL);
 }
 
 

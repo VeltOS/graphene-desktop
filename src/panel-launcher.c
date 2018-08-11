@@ -267,12 +267,18 @@ static gboolean add_app(GrapheneLauncherPopup *self, GDesktopAppInfo *appInfo)
 			g_free(path);
 		}
 	}
-	
-	if(!icon)
+	else if(gicon)
 	{
 		g_warning("Unhandled GIcon type %s on app '%s'", G_OBJECT_TYPE_NAME(gicon), g_app_info_get_display_name(G_APP_INFO(appInfo)));
-		icon = cmk_icon_new_from_name("", 24);
 	}
+	else
+	{
+		g_warning("No icon on app '%s'", g_app_info_get_display_name(G_APP_INFO(appInfo)));
+	}
+
+	if(!icon)
+		icon = cmk_icon_new_from_name("", 24);
+
 	cmk_button_set_content(button, CMK_WIDGET(icon));
 	cmk_button_set_text(button, g_app_info_get_display_name(G_APP_INFO(appInfo)));
 	cmk_widget_set_style_parent(CMK_WIDGET(button), self->window);
@@ -339,10 +345,16 @@ static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenu
 	return count;
 }
 
+static gboolean applist_item_click_timeout_cb(gpointer actor)
+{
+	clutter_actor_destroy((ClutterActor *)actor);
+	return G_SOURCE_REMOVE;
+}
+
 static void applist_on_item_clicked(GrapheneLauncherPopup *self, CmkButton *button)
 {
 	// Delay so the click animation can be seen
-	clutter_threads_add_timeout(200, (GSourceFunc)clutter_actor_destroy, self);
+	clutter_threads_add_timeout(200, applist_item_click_timeout_cb, self);
 
 	GDesktopAppInfo *appInfo = g_object_get_data(G_OBJECT(button), "appinfo");
 	if(appInfo)

@@ -41,9 +41,10 @@ ClutterLayoutManager * clutter_vertical_box_new()
 	return CLUTTER_LAYOUT_MANAGER(layout);
 }
 
-static void waitback(GrapheneSettingsPanel *self)
+static gboolean waitback(gpointer self)
 {
-	g_signal_emit_by_name(self, "back");
+	g_signal_emit_by_name((GrapheneSettingsPanel *)self, "back");
+	return G_SOURCE_REMOVE;
 }
 
 static void on_settings_widget_clicked_n(GrapheneSettingsPanel *self, CmkButton *button)
@@ -55,7 +56,7 @@ static void on_settings_widget_clicked_n(GrapheneSettingsPanel *self, CmkButton 
 static void on_settings_widget_clicked(GrapheneSettingsPanel *self, CmkButton *button)
 {
 	// Delay so the click animation can be seen
-	clutter_threads_add_timeout(200, (GSourceFunc)waitback, self);
+	clutter_threads_add_timeout(200, waitback, self);
 
 	// As of September-ish 2017, gnome-control-center requires
 	// this set otherwise its GUI is completely blank and broken.
